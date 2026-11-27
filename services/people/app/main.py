@@ -38,7 +38,7 @@ def health():
 
 
 def person_dict(p):
-    return {k: getattr(p, k) for k in ("id", "first_name", "last_name", "field", "bio", "achievements", "specialties", "experience", "image_url", "medals", "education", "capacity", "current_load", "status", "is_public")}
+    return {k: getattr(p, k, None) for k in ("id", "first_name", "last_name", "field", "bio", "achievements", "specialties", "experience", "image_url", "medals", "education", "capacity", "current_load", "status", "is_public")}
 
 
 class PersonInput(BaseModel):
@@ -113,7 +113,7 @@ def update_mentor(person_id: int, payload: PersonInput, db: Session = Depends(ge
     safe_image(payload.image_url)
     row = db.get(models.Mentor, person_id)
     if not row: raise HTTPException(404, "mentor not found")
-    for key, value in payload.model_dump().items(): setattr(row, key, value)
+    for key, value in payload.model_dump(exclude={"achievements"}).items(): setattr(row, key, value)
     db.commit(); db.refresh(row)
     return person_dict(row)
 
@@ -126,7 +126,7 @@ def admin_tutors(db: Session = Depends(get_db), _: dict = Depends(require_admin)
 @app.post("/admin/tutors", status_code=201)
 def create_tutor(payload: PersonInput, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     safe_image(payload.image_url)
-    row = models.Tutor(**payload.model_dump())
+    row = models.Tutor(**payload.model_dump(exclude={"achievements"}))
     db.add(row); db.commit(); db.refresh(row)
     return person_dict(row)
 
