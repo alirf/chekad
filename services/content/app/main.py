@@ -105,6 +105,18 @@ class ExamInput(BaseModel):
     status: Literal["draft", "published", "upcoming", "closed", "completed"] = "draft"
     cover_image_url: str | None = None
 
+    @field_validator("registration_url")
+    @classmethod
+    def validate_registration_url(cls, value):
+        if not value:
+            return value
+        parsed = urlsplit(value)
+        safe_path = value.startswith("/") and not value.startswith("//") and "\\\\" not in value
+        safe_https = parsed.scheme == "https" and parsed.netloc and not parsed.username and not parsed.password
+        if not (safe_path or safe_https):
+            raise ValueError("لینک ثبت‌نام باید HTTPS یا مسیر داخلی معتبر باشد.")
+        return value
+
 
 def image_url_is_safe(value: str | None) -> None:
     if value is None or value == "":
