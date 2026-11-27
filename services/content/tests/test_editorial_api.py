@@ -78,3 +78,45 @@ def test_exam_create_and_public_filter():
     assert response.status_code == 201
     assert len(c.get("/exams?field=physics").json()) == 1
     assert c.get("/exams?field=computer").json() == []
+
+
+
+def test_page_sections_and_layout_round_trip():
+    app.dependency_overrides[require_admin] = admin
+    c = client()
+    payload = {
+        "slug": "about-chekad", "title": "About", "description": "About page",
+        "layout": "wide", "seo_title": "About us",
+        "seo_description": "About description",
+        "sections": [
+            {"type": "heading", "title": "Our mission", "body": "Make olympiad learning accessible"},
+            {"type": "features", "title": "What we do", "items": ["Physics", "Computer"]},
+        ],
+        "status": "published",
+    }
+    created = c.post("/admin/pages", json=payload)
+    assert created.status_code == 201
+    public = c.get("/pages/about-chekad")
+    assert public.status_code == 200
+    assert public.json()["layout"] == "wide"
+    assert public.json()["sections"][1]["items"] == ["Physics", "Computer"]
+
+
+def test_page_rejects_unsafe_section_image():
+    app.dependency_overrides[require_admin] = admin
+    payload = {
+        "slug": "unsafe-image", "title": "Unsafe",
+        "sections": [{"type": "image", "image_url": "javascript:alert(1)"}],
+    }
+    assert client().post("/admin/pages", json=payload).status_code == 422
+
+
+def test_admin_can_delete_exam():
+    app.dependency_overrides[require_admin] = admin
+    c = client()
+    payload = {"slug": "delete-me", "title": "Delete me", "field": "computer"}
+    created = c.post("/admin/exams", json=payload)
+    assert created.status_code == 201
+    response = c.delete("/admin/exams/" + str(created.json()["id"]))
+    assert response.status_code == 200
+    assert c.get("/exams").json() == []
