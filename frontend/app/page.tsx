@@ -317,9 +317,9 @@ export default function Home() {
               <Link href="/contact" className="home-inline-link">ارتباط با چکاد <Arrow /></Link>
             </div>
             <div className="home-faq-list">
-              {faqs.map((item, index) => (
+              {faqs.map((item) => (
                 <details className="home-faq-item" key={item.question}>
-                  <summary><span>{String(index + 1).padStart(2, "0")}</span><strong>{item.question}</strong><i aria-hidden="true">+</i></summary>
+                  <summary><strong>{item.question}</strong><i aria-hidden="true">+</i></summary>
                   <p>{item.answer}</p>
                 </details>
               ))}
