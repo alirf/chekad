@@ -1,4 +1,4 @@
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,8 +14,15 @@ class Settings(BaseSettings):
     jwt_issuer: str = "chekad-auth"
     jwt_audience: str = "chekad-admin"
 
+    app_env: str = "development"
     # Keep false only for local HTTP development. Set true behind HTTPS in production.
     auth_cookie_secure: bool = False
+
+    @model_validator(mode="after")
+    def enforce_secure_cookie_in_production(self):
+        if self.app_env.lower() == "production" and not self.auth_cookie_secure:
+            raise ValueError("AUTH_COOKIE_SECURE must be true when APP_ENV=production")
+        return self
 
     @field_validator("jwt_secret")
     @classmethod

@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db import Base, get_db
-from app.main import app
+from app.main import app, require_admin
 from app.models import MentorshipApplication, Student, TutoringApplication
 
 TEST_ENGINE = create_engine(
@@ -228,3 +228,46 @@ def test_request_requires_origin_header(client, db_session):
 
     assert response.status_code == 403
     assert db_session.query(Student).count() == 0
+
+
+
+def test_admin_inbox_status_and_internal_notes(client, db_session):
+    app.dependency_overrides[require_admin] = lambda: {"id": 7}
+    try:
+        created = client.post(
+            "/mentorship-applications",
+            json=valid_common_payload(),
+            headers=same_origin_headers(),
+        )
+        assert created.status_code == 201
+        request_id = created.json()["request_id"]
+
+        listing = client.get("/admin/applications?kind=mentorship")
+        assert listing.status_code == 200
+        assert listing.json()["total"] == 1
+        assert listing.json()["items"][0]["student"]["first_name"] == "آرمان"
+
+        detail = client.get(f"/admin/applications/mentorship/{request_id}")
+        assert detail.status_code == 200
+        assert detail.json()["student"]["guardian_phone"] == "+989123456789"
+
+        changed = client.patch(
+            f"/admin/applications/mentorship/{request_id}",
+            json={"status": "reviewing"},
+            headers=same_origin_headers(),
+        )
+        assert changed.status_code == 200
+        assert changed.json()["status"] == "reviewing"
+
+        noted = client.post(
+            f"/admin/applications/mentorship/{request_id}/notes",
+            json={"content": "تماس اولیه انجام شود"},
+            headers=same_origin_headers(),
+        )
+        assert noted.status_code == 201
+        assert noted.json()["admin_id"] == 7
+
+        refreshed = client.get(f"/admin/applications/mentorship/{request_id}")
+        assert refreshed.json()["internal_notes"][0]["content"] == "تماس اولیه انجام شود"
+    finally:
+        app.dependency_overrides.pop(require_admin, None)

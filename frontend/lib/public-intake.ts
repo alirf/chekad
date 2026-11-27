@@ -2,10 +2,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isPublicApplicationIntakeEnabled(): boolean {
   const enabled = process.env.PUBLIC_APPLICATIONS_ENABLED === "true";
+  const termsApproved = process.env.TERMS_APPROVED === "true";
   const privacyEmail = process.env.PRIVACY_CONTACT_EMAIL?.trim() ?? "";
   const siteOrigin = process.env.PUBLIC_SITE_ORIGIN?.trim() ?? "";
 
-  if (!enabled || !EMAIL_PATTERN.test(privacyEmail)) return false;
+  if (!enabled || !termsApproved || !EMAIL_PATTERN.test(privacyEmail)) return false;
 
   try {
     const origin = new URL(siteOrigin);

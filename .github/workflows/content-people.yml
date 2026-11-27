@@ -2,7 +2,7 @@ name: Content and people API
 
 on:
   push:
-    branches: [main, "feat/content-admin-exams-mentors"]
+    branches: [main, "feat/content-admin-exams-mentors", "feat/phase-1-operational-readiness"]
     paths:
       - "services/content/**"
       - "services/people/**"

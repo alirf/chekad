@@ -21,6 +21,20 @@ app = FastAPI(title=f"Chekad {settings.service_name}", version="0.3.0")
 
 
 async def require_admin(request: Request) -> dict:
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        origin = request.headers.get("origin")
+        parsed = urlsplit(origin or "")
+        configured = urlsplit(settings.public_site_origin.strip())
+        if not origin or parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.path not in ("", "/") or parsed.query or parsed.fragment or parsed.username or parsed.password:
+            raise HTTPException(403, "مبدأ درخواست مدیریتی معتبر نیست.")
+        if configured.scheme and configured.netloc:
+            matches = f"{parsed.scheme}://{parsed.netloc}".lower() == f"{configured.scheme}://{configured.netloc}".lower()
+        else:
+            host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+            proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+            matches = parsed.netloc.lower() == host.lower() and parsed.scheme.lower() == proto.lower()
+        if not matches:
+            raise HTTPException(403, "مبدأ درخواست مدیریتی با وب‌سایت چکاد مطابقت ندارد.")
     headers = {}
     if request.headers.get("cookie"):
         headers["Cookie"] = request.headers["cookie"]

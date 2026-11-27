@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     public_applications_enabled: bool = False
     public_site_origin: str = ""
     privacy_contact_email: str = ""
+    terms_approved: bool = False
 
 
 settings = Settings()

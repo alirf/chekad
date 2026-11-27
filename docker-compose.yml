@@ -116,6 +116,7 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-chekad-auth}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-chekad-admin}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      APP_ENV: ${APP_ENV:-development}
     depends_on:
       migrate-auth:
         condition: service_completed_successfully

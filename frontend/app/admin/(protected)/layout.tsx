@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { LogoutButton } from "./logout-button";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export default async function ProtectedAdminLayout({ children }: { children: Rea
             <p className="font-bold text-slate-900">چکاد</p>
             <p className="mt-1 text-xs text-slate-500">پنل مدیریت · {admin.name}</p>
           </div>
-          <LogoutButton />
+          <nav className="flex items-center gap-3"><Link href="/admin" className="text-sm font-bold text-slate-700 hover:text-blue-700">درخواست‌ها</Link><Link href="/admin/content" className="text-sm font-bold text-slate-700 hover:text-blue-700">محتوا</Link><LogoutButton /></nav>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>

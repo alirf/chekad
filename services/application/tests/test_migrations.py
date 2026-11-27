@@ -30,5 +30,9 @@ def test_initial_and_privacy_migrations_upgrade_cleanly(tmp_path, monkeypatch):
     assert tutoring_columns["guardian_consent_at"]["nullable"] is True
     assert tutoring_columns["privacy_accepted_at"]["nullable"] is True
     assert tutoring_columns["privacy_notice_version"]["nullable"] is True
+    assert mentorship_columns["idempotency_key"]["nullable"] is True
+    assert mentorship_columns["request_fingerprint"]["nullable"] is True
+    assert tutoring_columns["idempotency_key"]["nullable"] is True
+    assert tutoring_columns["request_fingerprint"]["nullable"] is True
 
     engine.dispose()

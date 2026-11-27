@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     jwt_secret: str = ""
     jwt_expire_minutes: int = 120
     auth_internal_url: str = "http://auth-service:8000"
+    public_site_origin: str = ""
 
 
 settings = Settings()
