@@ -54,6 +54,8 @@ class MentorshipApplication(Base):
     student_note = Column(Text)
     admin_note = Column(Text)
     reject_reason = Column(Text)
+    idempotency_key = Column(String(64), unique=True, nullable=True, index=True)
+    request_fingerprint = Column(String(64), nullable=True)
     # Nullable for records created before explicit guardian consent was added.
     guardian_consent_at = Column(DateTime(timezone=True), nullable=True)
     privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
@@ -114,6 +116,8 @@ class TutoringApplication(Base):
     status = Column(String(30), default="new", nullable=False, index=True)
     admin_note = Column(Text)
     reject_reason = Column(Text)
+    idempotency_key = Column(String(64), unique=True, nullable=True, index=True)
+    request_fingerprint = Column(String(64), nullable=True)
     guardian_consent_at = Column(DateTime(timezone=True), nullable=True)
     privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
     privacy_notice_version = Column(String(50), nullable=True)

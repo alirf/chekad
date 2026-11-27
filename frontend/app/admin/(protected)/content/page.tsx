@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { MarkdownContent } from "../../components/markdown-content";
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { MarkdownContent } from "../../../../components/markdown-content";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 type Kind = "articles" | "exams" | "pages" | "mentors" | "tutors";
 type Row = { id: number; title?: string; slug?: string; status?: string; first_name?: string; last_name?: string } & Record<string, unknown>;

@@ -69,3 +69,26 @@ class PublicApplicationCreated(BaseModel):
     request_id: int
     status: Literal["received"] = "received"
     message: str
+
+
+ApplicationStatus = Literal[
+    "new", "reviewing", "waiting_for_student", "options_proposed",
+    "accepted", "active", "completed", "rejected", "cancelled",
+]
+
+
+class AdminApplicationStatusUpdate(BaseModel):
+    status: ApplicationStatus
+    reject_reason: str | None = Field(default=None, max_length=1000)
+
+
+class InternalNoteCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("content")
+    @classmethod
+    def validate_non_blank_content(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("یادداشت نمی‌تواند خالی باشد.")
+        return value
