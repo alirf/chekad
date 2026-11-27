@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MarkdownContent } from "../../components/markdown-content";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type Kind = "articles" | "exams" | "pages" | "mentors" | "tutors";
@@ -243,9 +244,10 @@ export default function AdminPage() {
                   {imageField && values[field] && <img src={values[field]} alt="پیش‌نمایش تصویر" className="mt-3 max-h-44 rounded-xl object-contain" />}
                 </label>;
               })}
-              {kind === "articles" && <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="mb-2 text-sm font-bold text-slate-700">پیش‌نمایش نوشتار</p><div className="mb-2 text-lg font-extrabold text-slate-900">{values.title || "عنوان مقاله"}</div><p className="whitespace-pre-wrap text-sm leading-8 text-slate-600">{values.body || "متن مقاله پس از نوشتن در این بخش پیش‌نمایش داده می‌شود."}</p></div>}
+              {kind === "articles" && <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="mb-2 text-sm font-bold text-slate-700">پیش‌نمایش نوشتار</p><div className="mb-2 text-lg font-extrabold text-slate-900">{values.title || "عنوان مقاله"}</div>{values.body ? <MarkdownContent source={values.body} /> : <p className="text-sm leading-8 text-slate-600">متن مقاله پس از نوشتن در این بخش پیش‌نمایش داده می‌شود.</p>}</div>}
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 <button disabled={busy} className="rounded-xl bg-blue-700 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? "در حال انجام..." : selected ? "ذخیره تغییرات" : "ایجاد و ذخیره"}</button>
+                {kind === "pages" && values.slug && <Link href={"/pages/" + values.slug} target="_blank" rel="noreferrer" className="rounded-xl border border-slate-300 px-5 py-3 font-bold">مشاهده صفحه عمومی</Link>}
                 {selected && <button type="button" disabled={busy} onClick={() => void removeSelected()} className="rounded-xl border border-red-200 px-5 py-3 font-bold text-red-700 disabled:opacity-50">حذف مورد</button>}
                 <button type="button" onClick={() => { setSelected(null); setValues(defaults[kind]); }} className="rounded-xl border border-slate-300 px-5 py-3 font-bold">پاک‌کردن فرم</button>
               </div>
