@@ -9,7 +9,8 @@ export const metadata: Metadata = {
 };
 
 export default function ContactPage() {
-  const privacyCandidate = process.env.PRIVACY_CONTACT_EMAIL?.trim() ?? "";\n  const privacyEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(privacyCandidate) ? privacyCandidate : "";
+  const privacyCandidate = process.env.PRIVACY_CONTACT_EMAIL?.trim() ?? "";
+  const privacyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(privacyCandidate) ? privacyCandidate : "";
 
   return (
     <main id="main-content">
