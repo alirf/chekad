@@ -129,7 +129,7 @@ def test_authenticated_png_upload_is_saved_and_publicly_readable(tmp_path, monke
     app.dependency_overrides[require_admin] = admin
     c = client()
     # A PNG signature is sufficient for the upload's content-type gate.
-    png = b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-payload"
+    png = bytes.fromhex("89504e470d0a1a0a") + b"test-image-payload"
     response = c.post(
         "/admin/media",
         files={"file": ("cover.png", png, "image/png")},
