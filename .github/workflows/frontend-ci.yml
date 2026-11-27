@@ -44,6 +44,7 @@ jobs:
     env:
       DB_URL: sqlite:///./application-test-default.db
       SERVICE_NAME: application-service
+      PYTHONPATH: ${{ github.workspace }}/services/application
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,4 +55,4 @@ jobs:
       - name: Install application and test dependencies
         run: pip install -r requirements-dev.txt
       - name: Run API, privacy and migration tests
-        run: pytest -q
+        run: python -m pytest -q

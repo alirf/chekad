@@ -9,8 +9,13 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function BlogArticlePage({ params }: { params: { slug: string } }) {
-  if (!params.slug || params.slug.length > 160) notFound();
+export default async function BlogArticlePage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  if (!slug || slug.length > 160) notFound();
 
   return (
     <main id="main-content">

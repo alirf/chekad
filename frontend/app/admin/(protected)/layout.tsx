@@ -11,7 +11,8 @@ type Admin = {
 };
 
 export default async function ProtectedAdminLayout({ children }: { children: React.ReactNode }) {
-  const token = cookies().get("chekad_access_token")?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get("chekad_access_token")?.value;
   if (!token) redirect("/admin/login");
 
   const authServiceUrl = process.env.AUTH_INTERNAL_URL || "http://auth-service:8000";

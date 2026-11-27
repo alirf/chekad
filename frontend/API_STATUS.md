@@ -94,3 +94,13 @@ GitHub Actions runs:
 - application-service tests for API persistence, consent, same-origin checks, private responses, admin protection and Alembic migrations.
 
 A workflow file is not proof of success; inspect the resulting GitHub Actions run status.
+
+
+## Framework and CI compatibility
+
+- Next.js upgraded from unsupported 14.2.5 to 16.4.6 (Active LTS).
+- React and React DOM upgraded to 19.3.1.
+- Next 16 async request APIs are used for route params and admin cookies.
+- ESLint uses the Next 16 flat configuration and the CLI script `eslint .`; the removed `next lint` command is no longer used.
+- TypeScript remains on the existing 5.5 line; React type packages are pinned to compatible 19.2.x declarations.
+- GitHub Actions exposes the application package to pytest through `PYTHONPATH` and invokes `python -m pytest`.
