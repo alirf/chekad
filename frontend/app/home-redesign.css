@@ -1343,7 +1343,10 @@ body:has(.home-page) .brand-logo-header {
   color: #245c98;
   background: linear-gradient(145deg, #f2f7fd, #e6eff9);
   box-shadow: 0 0 0 5px #fff;
-  font: 800 12px/1 Vazirmatn, sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  font-family: inherit;
   font-variant-numeric: tabular-nums;
 }
 .home-process-step-index i {
