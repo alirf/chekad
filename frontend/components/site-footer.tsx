@@ -37,7 +37,7 @@ export function SiteFooter() {
           <div className="footer-brand">
             <Link href="/" className="brand brand-light" aria-label="چکاد، صفحه اصلی">
               <Image
-                src="/chekad-logo.svg"
+                src="/chekad-logo-white.svg"
                 alt="لوگوی چکاد"
                 width={104}
                 height={104}
