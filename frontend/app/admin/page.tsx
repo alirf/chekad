@@ -91,7 +91,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    setValues(defaults[kind]); setSelected(null); setMessage(""); void load(kind);
+    void load(kind);
     // load is intentionally called when the selected content type changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind]);
@@ -190,7 +190,7 @@ export default function AdminPage() {
           <Link href="/admin/login" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold">ورود مدیر</Link>
         </header>
         <nav className="mb-6 flex flex-wrap gap-2">
-          {(Object.keys(labels) as Kind[]).map((item) => <button type="button" key={item} onClick={() => setKind(item)} className={"rounded-xl px-4 py-3 text-sm font-bold " + (kind === item ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700")}>{labels[item]}</button>)}
+          {(Object.keys(labels) as Kind[]).map((item) => <button type="button" key={item} onClick={() => { setValues(defaults[item]); setSelected(null); setMessage(""); setKind(item); }} className={"rounded-xl px-4 py-3 text-sm font-bold " + (kind === item ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700")}>{labels[item]}</button>)}
         </nav>
         {error && <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
         {message && <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{message}</p>}
