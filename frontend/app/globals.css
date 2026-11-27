@@ -445,3 +445,74 @@ img, svg { max-width: 100%; }
 
 .brand-logo { display:block; width:72px; height:72px; object-fit:contain; border-radius:10px; background:#fff; }
 .brand-logo-footer { width:104px; height:104px; }
+
+
+/* Footer typography: improve readability while preserving the existing layout. */
+.site-footer {
+  padding-top: 68px;
+}
+.footer-main {
+  gap: clamp(30px, 3.5vw, 56px);
+  padding-bottom: 54px;
+}
+.footer-brand p {
+  max-width: 360px;
+  margin-top: 20px;
+  font-size: 14px;
+  line-height: 2.15;
+}
+.footer-group h2 {
+  margin: 6px 0 18px;
+  font-size: 16px;
+  font-weight: 850;
+  line-height: 1.8;
+}
+.footer-group ul {
+  gap: 13px;
+}
+.footer-group a {
+  font-size: 14px;
+  line-height: 1.9;
+}
+.footer-bottom {
+  min-height: 74px;
+  gap: 20px;
+  font-size: 12px;
+  line-height: 2;
+}
+@media (max-width: 900px) {
+  .footer-main {
+    gap: 30px 24px;
+  }
+}
+@media (max-width: 680px) {
+  .site-footer {
+    padding-top: 48px;
+  }
+  .footer-main {
+    gap: 28px 20px;
+    padding-bottom: 34px;
+  }
+  .footer-brand p {
+    max-width: 420px;
+    font-size: 13px;
+    line-height: 2.1;
+  }
+  .footer-group h2 {
+    margin-bottom: 12px;
+    font-size: 15px;
+  }
+  .footer-group ul {
+    gap: 10px;
+  }
+  .footer-group a {
+    font-size: 13px;
+  }
+  .footer-bottom {
+    min-height: 0;
+    align-items: flex-start;
+    padding-block: 17px;
+    gap: 6px;
+    font-size: 11px;
+  }
+}
