@@ -136,10 +136,17 @@ services:
     environment:
       SERVICE_NAME: application-service
       SERVICE_PORT: 8000
+      AUTH_INTERNAL_URL: http://auth-service:8000
       DB_URL: postgresql+psycopg2://${APP_DB_USER:-chekad_application_app}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-chekad_application}
+      PUBLIC_APPLICATIONS_ENABLED: ${PUBLIC_APPLICATIONS_ENABLED:-false}
+      PUBLIC_SITE_ORIGIN: ${PUBLIC_SITE_ORIGIN:-}
+      PRIVACY_CONTACT_EMAIL: ${PRIVACY_CONTACT_EMAIL:-}
+      PURGE_APPLICATIONS_AFTER_DAYS: ${PURGE_APPLICATIONS_AFTER_DAYS:-365}
     depends_on:
       migrate-application:
         condition: service_completed_successfully
+      auth-service:
+        condition: service_healthy
     networks: [chekad]
     expose: ["8000"]
     healthcheck:
@@ -148,6 +155,20 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+
+  application-retention:
+    image: chekad-application:local
+    container_name: chekad-application-retention
+    restart: unless-stopped
+    command: ["sh", "-c", "while true; do python -m app.purge_expired_applications; sleep 86400; done"]
+    environment:
+      SERVICE_NAME: application-retention
+      DB_URL: postgresql+psycopg2://${APP_DB_USER:-chekad_application_app}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-chekad_application}
+      PURGE_APPLICATIONS_AFTER_DAYS: ${PURGE_APPLICATIONS_AFTER_DAYS:-365}
+    depends_on:
+      application-service:
+        condition: service_healthy
+    networks: [chekad]
 
   people-service:
     image: chekad-people:local
@@ -198,6 +219,9 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE: /api
       AUTH_INTERNAL_URL: http://auth-service:8000
+      PUBLIC_APPLICATIONS_ENABLED: ${PUBLIC_APPLICATIONS_ENABLED:-false}
+      PUBLIC_SITE_ORIGIN: ${PUBLIC_SITE_ORIGIN:-}
+      PRIVACY_CONTACT_EMAIL: ${PRIVACY_CONTACT_EMAIL:-}
     networks: [chekad]
     expose: ["3000"]
     healthcheck:

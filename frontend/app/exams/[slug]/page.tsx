@@ -2,15 +2,20 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumbs, EmptyState } from "../../../components/site-ui";
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "جزئیات آزمون",
     description: "اطلاعات آزمون آزمایشی المپیاد در چکاد.",
   };
 }
 
-export default function ExamDetailPage({ params }: { params: { slug: string } }) {
-  if (!params.slug || params.slug.length > 120) notFound();
+export default async function ExamDetailPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  if (!slug || slug.length > 120) notFound();
 
   return (
     <main id="main-content">

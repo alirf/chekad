@@ -23,8 +23,6 @@ export function RemotePeople({
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setFailed(false);
 
     fetchPublicPeople(kind, field)
       .then((result) => {

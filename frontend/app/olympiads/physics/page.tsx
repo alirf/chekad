@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Breadcrumbs, CtaBanner, FeatureList, PageIntro, SectionHeading } from "../../../components/site-ui";
 import { RemotePeople } from "../../../components/remote-people";
 
@@ -12,8 +13,8 @@ export default function PhysicsOlympiadPage() {
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "المپیاد فیزیک" }]} />
       <PageIntro eyebrow="PHYSICS OLYMPIAD" title="فیزیک را عمیق‌تر بفهم؛ مسئله‌ها را دقیق‌تر حل کن." description="مسیر المپیاد فیزیک به فهم مفهومی، مدل‌سازی و صبر در مواجهه با مسئله‌های چندمرحله‌ای نیاز دارد. چکاد برای همراهی در این مسیر طراحی شده است." >
-        <a href="/mentorship/apply" className="button button-primary">درخواست منتورینگ فیزیک <span aria-hidden="true">←</span></a>
-        <a href="/exams" className="button button-secondary">آزمون‌های فیزیک</a>
+        <Link href="/mentorship/apply" className="button button-primary">درخواست منتورینگ فیزیک <span aria-hidden="true">←</span></Link>
+        <Link href="/exams" className="button button-secondary">آزمون‌های فیزیک</Link>
       </PageIntro>
       <section className="content-section">
         <div className="container split-content">
