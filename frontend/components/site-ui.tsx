@@ -29,7 +29,7 @@ export function ActionLink({
 }: {
   href: string;
   children: ReactNode;
-  variant?: "primary" | "secondary" | "text";
+  variant?: "primary" | "secondary" | "text" | "light";
   className?: string;
 }) {
   return (
