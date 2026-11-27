@@ -155,8 +155,8 @@ async def upload_media(file: UploadFile = File(...), _: dict = Depends(require_a
     if len(content) > MAX_IMAGE_BYTES:
         raise HTTPException(413, "حجم تصویر نباید بیشتر از ۵ مگابایت باشد.")
     signatures = {
-        "image/jpeg": (content.startswith(b"\\xff\\xd8\\xff"), "jpg"),
-        "image/png": (content.startswith(b"\\x89PNG\\r\\n\\x1a\\n"), "png"),
+        "image/jpeg": (content.startswith(b"\xff\xd8\xff"), "jpg"),
+        "image/png": (content.startswith(b"\x89PNG\r\n\x1a\n"), "png"),
         "image/webp": (len(content) >= 12 and content[:4] == b"RIFF" and content[8:12] == b"WEBP", "webp"),
     }
     valid, extension = signatures[file.content_type]
@@ -171,7 +171,7 @@ async def upload_media(file: UploadFile = File(...), _: dict = Depends(require_a
 
 @app.get("/media/{filename}")
 def get_media(filename: str):
-    if not re.fullmatch(r"[a-f0-9]{32}\\.(jpg|png|webp)", filename):
+    if not re.fullmatch(r"[a-f0-9]{32}\.(jpg|png|webp)", filename):
         raise HTTPException(404, "media not found")
     path = MEDIA_DIR / filename
     if not path.is_file():
