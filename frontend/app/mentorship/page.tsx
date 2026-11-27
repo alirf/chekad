@@ -20,7 +20,7 @@ export default function MentorshipPage() {
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "مشاوره و منتورینگ" }]} />
       <PageIntro eyebrow="MENTORSHIP" title="در مسیر المپیاد، فقط بیشتر نخوان؛ هوشمندانه‌تر پیش برو." description="منتورینگ چکاد برای ساختن یک مسیر روشن‌تر است؛ همراهی فردی باتجربه که کمک می‌کند هدف‌ها، برنامه و قدم بعدی را بهتر بشناسی." >
         <a className="button button-primary" href="/mentorship/apply">درخواست منتورینگ <span aria-hidden="true">←</span></a>
-        <a className="button button-secondary" href="#how-it-works">فرایند همکاری</a>
+        <Link className="button button-secondary" href="#how-it-works">فرایند همکاری</a>
       </PageIntro>
 
       <section className="content-section">

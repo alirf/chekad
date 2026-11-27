@@ -1,22 +1,33 @@
 import type { Metadata } from "next";
 import { Breadcrumbs, PageIntro } from "../../components/site-ui";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "تماس با چکاد",
-  description: "راه‌های ارتباطی و پیگیری درخواست‌های چکاد.",
+  description: "راه‌های ارتباطی رسمی و مسئول حریم خصوصی چکاد.",
 };
 
 export default function ContactPage() {
+  const privacyCandidate = process.env.PRIVACY_CONTACT_EMAIL?.trim() ?? "";\n  const privacyEmail = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(privacyCandidate) ? privacyCandidate : "";
+
   return (
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "تماس با چکاد" }]} />
-      <PageIntro eyebrow="CONTACT" title="در ارتباط باشیم." description="راه‌های ارتباطی رسمی چکاد پس از تأیید و ثبت اطلاعات در این صفحه منتشر می‌شوند." />
+      <PageIntro eyebrow="CONTACT" title="در ارتباط باشیم." description="برای پیگیری درخواست و پرسش‌های مرتبط با اطلاعات شخصی، از راه ارتباطی رسمی تنظیم‌شده توسط چکاد استفاده کنید." />
       <section className="content-section">
         <div className="container content-narrow">
-          <div className="legal-placeholder">
-            <h2>اطلاعات تماس در حال تکمیل است</h2>
-            <p>در حال حاضر نشانی ایمیل، شماره تماس یا حساب شبکه اجتماعی تأییدشده‌ای برای انتشار عمومی در اطلاعات پروژه ثبت نشده است؛ بنابراین از نمایش اطلاعات حدسی خودداری می‌کنیم.</p>
-          </div>
+          {privacyEmail ? (
+            <div className="privacy-contact">
+              <strong>مسئول حریم خصوصی و پیگیری درخواست‌ها</strong>
+              <a href={"mailto:" + privacyEmail}>{privacyEmail}</a>
+            </div>
+          ) : (
+            <div className="legal-placeholder">
+              <h2>راه ارتباطی رسمی هنوز تنظیم نشده است</h2>
+              <p>نشانی ایمیل یا شماره تماس تأییدشده‌ای برای انتشار عمومی در تنظیمات استقرار ثبت نشده است. تا زمان ثبت یک راه ارتباطی فعال، فرم‌های عمومی دریافت اطلاعات را آغاز نمی‌کنند.</p>
+            </div>
+          )}
         </div>
       </section>
     </main>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Breadcrumbs, CtaBanner, FeatureList, PageIntro, SectionHeading } from "../../../components/site-ui";
 import { RemotePeople } from "../../../components/remote-people";
 
@@ -12,8 +13,8 @@ export default function ComputerOlympiadPage() {
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "المپیاد کامپیوتر" }]} />
       <PageIntro eyebrow="COMPUTER SCIENCE OLYMPIAD" title="مسئله را بشناس؛ الگوریتم را با دقت بساز." description="المپیاد کامپیوتر با تفکر الگوریتمی، خلاقیت در طراحی راه‌حل و تحلیل دقیق مسئله گره خورده است. چکاد برای همراهی تخصصی در این مسیر فعالیت می‌کند." >
-        <a href="/mentorship/apply" className="button button-primary">درخواست منتورینگ کامپیوتر <span aria-hidden="true">←</span></a>
-        <a href="/exams" className="button button-secondary">آزمون‌های کامپیوتر</a>
+        <Link href="/mentorship/apply" className="button button-primary">درخواست منتورینگ کامپیوتر <span aria-hidden="true">←</span></Link>
+        <Link href="/exams" className="button button-secondary">آزمون‌های کامپیوتر</Link>
       </PageIntro>
       <section className="content-section">
         <div className="container split-content">

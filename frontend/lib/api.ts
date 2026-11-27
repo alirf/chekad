@@ -12,6 +12,26 @@ export interface PublicPerson {
   experience?: string | null;
 }
 
+export interface PublicApplicationPayload {
+  first_name: string;
+  last_name: string;
+  grade: string;
+  field: OlympiadField;
+  guardian_phone: string;
+  guardian_consent: true;
+  privacy_accepted: true;
+  goal?: string;
+  notes?: string;
+  level?: string;
+  topic?: string;
+}
+
+export interface PublicApplicationResult {
+  request_id: number;
+  status: "received";
+  message: string;
+}
+
 export type ApiFailureKind = "http" | "network" | "invalid-response";
 
 export class ApiError extends Error {
@@ -77,10 +97,73 @@ export async function fetchPublicPeople(
   });
 }
 
+export async function submitPublicApplication(
+  kind: "mentorship" | "tutoring",
+  payload: PublicApplicationPayload,
+): Promise<PublicApplicationResult> {
+  const endpoint =
+    kind === "mentorship"
+      ? "/application/mentorship-applications"
+      : "/application/tutoring-applications";
+
+  let response: Response;
+  try {
+    response = await fetch(API_BASE + endpoint, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new ApiError("پاسخ سرور دریافت نشد و وضعیت ثبت درخواست نامشخص است. پیش از ارسال دوباره، با چکاد پیگیری کنید.", "network");
+  }
+
+  if (!response.ok) {
+    if (response.status === 422) {
+      throw new ApiError("برخی اطلاعات واردشده معتبر نیستند. فرم را بررسی کنید.", "http", 422);
+    }
+    if (response.status === 403) {
+      throw new ApiError("درخواست از مبدأ معتبر ارسال نشده است. صفحه را تازه‌سازی کنید.", "http", 403);
+    }
+    if (response.status === 429) {
+      throw new ApiError("تعداد درخواست‌ها بیش از حد مجاز است. چند دقیقه دیگر دوباره تلاش کنید.", "http", 429);
+    }
+    if (response.status === 503) {
+      throw new ApiError(
+        "ثبت درخواست موقتاً غیرفعال است. لطفاً از طریق راه ارتباطی رسمی چکاد پیگیری کنید.",
+        "http",
+        503,
+      );
+    }
+    throw new ApiError("ثبت درخواست انجام نشد. اطلاعات شما ثبت‌شده تلقی نمی‌شود.", "http", response.status);
+  }
+
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    throw new ApiError("پاسخ سرور قابل خواندن نیست؛ وضعیت ثبت درخواست را از چکاد پیگیری کنید.", "invalid-response");
+  }
+
+  if (
+    typeof result !== "object" ||
+    result === null ||
+    typeof (result as PublicApplicationResult).request_id !== "number" ||
+    (result as PublicApplicationResult).status !== "received" ||
+    typeof (result as PublicApplicationResult).message !== "string"
+  ) {
+    throw new ApiError("ساختار پاسخ سرور معتبر نیست؛ وضعیت ثبت درخواست را پیگیری کنید.", "invalid-response");
+  }
+
+  return result as PublicApplicationResult;
+}
+
 export async function fetchPublicSiteContent(): Promise<Record<string, string>> {
   let response: Response;
   try {
-    // The gateway forwards /api/content/ to the content-service root.
     response = await fetch(API_BASE + "/content/", {
       headers: { Accept: "application/json" },
       cache: "no-store",

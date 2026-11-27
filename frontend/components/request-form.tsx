@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import type { OlympiadField } from "../lib/api";
+import Link from "next/link";
+import { ApiError, submitPublicApplication, type OlympiadField } from "../lib/api";
 
 type RequestKind = "mentorship" | "tutoring";
 
@@ -11,39 +12,105 @@ const fields: { value: OlympiadField; label: string }[] = [
   { value: "computer", label: "المپیاد کامپیوتر" },
 ];
 
-export function RequestForm({ kind }: { kind: RequestKind }) {
+export function RequestForm({
+  kind,
+  enabled,
+}: {
+  kind: RequestKind;
+  enabled: boolean;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState<1 | 2>(1);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [grade, setGrade] = useState("");
   const [field, setField] = useState<OlympiadField | "">("");
+  const [guardianPhone, setGuardianPhone] = useState("");
   const [level, setLevel] = useState("");
   const [goal, setGoal] = useState("");
   const [topic, setTopic] = useState("");
   const [notes, setNotes] = useState("");
-  const [telegram, setTelegram] = useState("");
-  const [notice, setNotice] = useState("");
+  const [guardianConsent, setGuardianConsent] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState<{ requestId: number; message: string } | null>(null);
 
   const isMentorship = kind === "mentorship";
 
   function goToNextStep() {
     if (formRef.current?.reportValidity()) {
-      setNotice("");
+      setError("");
       setStep(2);
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setNotice("");
+    setError("");
 
     const form = event.currentTarget;
-    if (!form.reportValidity()) return;
+    if (!form.reportValidity() || submitting) return;
 
-    // No public application POST endpoint exists yet. Do not send or persist
-    // student data until the backend contract and privacy flow are approved.
-    setNotice(
-      "اطلاعات شما ارسال نشد. فرم از نظر رابط کاربری آماده است، اما سرویس ثبت درخواست هنوز به وب‌سایت متصل نشده است. لطفاً فعلاً اطلاعات شخصی خود را در این فرم وارد نکنید.",
+    if (!guardianConsent || !privacyAccepted || !field) {
+      setError("تأیید سرپرست و پذیرش اطلاعیه حریم خصوصی الزامی است.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const result = await submitPublicApplication(kind, {
+        first_name: firstName,
+        last_name: lastName,
+        grade,
+        field,
+        guardian_phone: guardianPhone,
+        guardian_consent: true,
+        privacy_accepted: true,
+        ...(isMentorship ? { level: level || undefined } : { topic }),
+        goal: goal || undefined,
+        notes: notes || undefined,
+      });
+
+      setSuccess({ requestId: result.request_id, message: result.message });
+      form.reset();
+    } catch (submissionError) {
+      setError(
+        submissionError instanceof ApiError
+          ? submissionError.message
+          : "خطای پیش‌بینی‌نشده رخ داد. وضعیت ثبت درخواست را پیگیری کنید.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!enabled) {
+    return (
+      <section className="request-form request-disabled" aria-live="polite">
+        <span className="eyebrow">REQUEST INTAKE</span>
+        <span className="disabled-icon" aria-hidden="true">⌁</span>
+        <h2>ثبت درخواست هنوز فعال نشده است.</h2>
+        <p>چکاد باید ابتدا راه ارتباطی مسئول حریم خصوصی و نشانی رسمی وب‌سایت را در تنظیمات سرور ثبت و فعال‌سازی را تأیید کند. تا آن زمان، هیچ اطلاعاتی از شما دریافت نمی‌شود.</p>
+        <Link className="button button-secondary" href="/privacy">مشاهده اطلاعیه حریم خصوصی</Link>
+      </section>
+    );
+  }
+
+  if (success) {
+    return (
+      <section className="request-form request-success" aria-live="polite">
+        <span className="success-icon" aria-hidden="true">✓</span>
+        <span className="eyebrow">REQUEST RECEIVED</span>
+        <h2>درخواستت ثبت شد.</h2>
+        <p>{success.message}</p>
+        <div className="request-reference">
+          <span>کد پیگیری</span>
+          <strong dir="ltr">CH-{String(success.requestId).padStart(6, "0")}</strong>
+        </div>
+        <p className="form-footnote">این کد را برای پیگیری نزد خود نگه دار. اطلاعات تماس سرپرست فقط برای بررسی و پیگیری همین درخواست استفاده می‌شود.</p>
+        <Link className="button button-secondary" href="/privacy">مرور اطلاعیه حریم خصوصی</Link>
+      </section>
     );
   }
 
@@ -51,21 +118,26 @@ export function RequestForm({ kind }: { kind: RequestKind }) {
     <form ref={formRef} className="request-form" onSubmit={handleSubmit} noValidate>
       <div className="form-heading">
         <span className="eyebrow">{isMentorship ? "فرم درخواست منتورینگ" : "فرم درخواست کلاس خصوصی"}</span>
-        <h2>{step === 1 ? "ابتدا کمی با شرایطت آشنا شو." : "نیازت را دقیق‌تر توضیح بده."}</h2>
-        <p>فرم دو مرحله دارد. در این نسخه، اطلاعات واردشده به سرور ارسال یا ذخیره نمی‌شوند.</p>
+        <h2>{step === 1 ? "ابتدا مشخصات مسیر را وارد کن." : "نیاز و هدف را دقیق‌تر توضیح بده."}</h2>
+        <p>در نسخه فعلی، فرم توسط ولی یا سرپرست تکمیل می‌شود تا راه تماس مشخصی برای پیگیری درخواست وجود داشته باشد.</p>
       </div>
 
       <div className="form-progress" aria-label={step === 1 ? "مرحله اول از دو مرحله" : "مرحله دوم از دو مرحله"}>
         <div className={step === 1 ? "form-progress-item is-active" : "form-progress-item is-complete"}><span>۱</span>مشخصات مسیر</div>
         <i className={step === 2 ? "is-complete" : ""} />
-        <div className={step === 2 ? "form-progress-item is-active" : "form-progress-item"}><span>۲</span>نیاز و هدف</div>
+        <div className={step === 2 ? "form-progress-item is-active" : "form-progress-item"}><span>۲</span>نیاز و تأیید</div>
       </div>
 
       {step === 1 ? (
         <div className="form-grid form-step-panel">
-          <div className="form-field form-field-full">
-            <label htmlFor="student-name">نام و نام خانوادگی <span>*</span></label>
-            <input id="student-name" value={name} onChange={(event) => setName(event.target.value)} required minLength={3} maxLength={120} autoComplete="name" placeholder="نام دانش‌آموز" />
+          <div className="form-field">
+            <label htmlFor="student-first-name">نام دانش‌آموز <span>*</span></label>
+            <input id="student-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required minLength={2} maxLength={100} autoComplete="given-name" placeholder="نام" />
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="student-last-name">نام خانوادگی <span>*</span></label>
+            <input id="student-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} required minLength={2} maxLength={100} autoComplete="family-name" placeholder="نام خانوادگی" />
           </div>
 
           <div className="form-field">
@@ -83,14 +155,20 @@ export function RequestForm({ kind }: { kind: RequestKind }) {
               {fields.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
             </select>
           </div>
+
+          <div className="form-field form-field-full">
+            <label htmlFor="guardian-phone">شماره موبایل ولی یا سرپرست <span>*</span></label>
+            <input id="guardian-phone" value={guardianPhone} onChange={(event) => setGuardianPhone(event.target.value)} required type="tel" inputMode="tel" autoComplete="tel" dir="ltr" maxLength={20} placeholder="۰۹۱۲۳۴۵۶۷۸۹" />
+            <small>شماره شخصی دانش‌آموز دریافت نمی‌شود. این شماره فقط برای پیگیری درخواست استفاده خواهد شد.</small>
+          </div>
         </div>
       ) : (
         <div className="form-grid form-step-panel">
           {isMentorship ? (
             <div className="form-field form-field-full">
-              <label htmlFor="student-level">سطح فعلی</label>
+              <label htmlFor="student-level">سطح فعلی (اختیاری)</label>
               <select id="student-level" value={level} onChange={(event) => setLevel(event.target.value)}>
-                <option value="">انتخاب سطح (اختیاری)</option>
+                <option value="">انتخاب سطح</option>
                 <option value="آشنایی اولیه">آشنایی اولیه</option>
                 <option value="در حال مطالعه">در حال مطالعه</option>
                 <option value="آمادگی آزمون">آمادگی آزمون</option>
@@ -100,7 +178,7 @@ export function RequestForm({ kind }: { kind: RequestKind }) {
           ) : (
             <div className="form-field form-field-full">
               <label htmlFor="tutoring-topic">مبحث یا موضوع موردنیاز <span>*</span></label>
-              <input id="tutoring-topic" value={topic} onChange={(event) => setTopic(event.target.value)} required maxLength={160} placeholder="مثلاً مکانیک یا ساختمان داده" />
+              <input id="tutoring-topic" value={topic} onChange={(event) => setTopic(event.target.value)} required minLength={2} maxLength={160} placeholder="مثلاً مکانیک یا ساختمان داده" />
             </div>
           )}
 
@@ -110,30 +188,38 @@ export function RequestForm({ kind }: { kind: RequestKind }) {
           </div>
 
           <div className="form-field form-field-full">
-            <label htmlFor="request-notes">توضیحات تکمیلی</label>
-            <textarea id="request-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} maxLength={1200} placeholder="هر نکته‌ای که فکر می‌کنی به شناخت بهتر نیازت کمک می‌کند..." />
+            <label htmlFor="request-notes">توضیحات تکمیلی (اختیاری)</label>
+            <textarea id="request-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={4} maxLength={1200} placeholder="اطلاعات غیرحساس و مرتبط با نیاز آموزشی را بنویس..." />
           </div>
 
-          <div className="form-field form-field-full">
-            <label htmlFor="telegram-id">شناسه تلگرام یا روش ارتباطی ترجیحی</label>
-            <input id="telegram-id" value={telegram} onChange={(event) => setTelegram(event.target.value)} maxLength={100} dir="ltr" placeholder="@username (اختیاری)" />
-            <small>اطلاعات تماس را تا زمان فعال‌شدن ثبت امن درخواست، وارد نکنید.</small>
+          <div className="form-field form-field-full consent-group">
+            <label className="consent-check">
+              <input type="checkbox" checked={guardianConsent} onChange={(event) => setGuardianConsent(event.target.checked)} required />
+              <span>به‌عنوان ولی یا سرپرست، با ثبت درخواست این دانش‌آموز و استفاده از شماره تماس خود برای پیگیری آن موافقم. <b>*</b></span>
+            </label>
+            <label className="consent-check">
+              <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} required />
+              <span><Link href="/privacy" target="_blank" rel="noreferrer">اطلاعیه حریم خصوصی</Link> را خوانده‌ام و با پردازش اطلاعات لازم برای بررسی این درخواست موافقم. <b>*</b></span>
+            </label>
+            <p className="consent-note">این تأیید به‌صورت اظهار کاربر ثبت می‌شود و به‌تنهایی احراز هویت مستقل ولی یا سرپرست نیست. در این نسخه، فرم باید توسط خود ولی یا سرپرست تکمیل شود.</p>
           </div>
         </div>
       )}
 
-      {notice ? <p className="form-notice" role="status" aria-live="polite">{notice}</p> : null}
+      {error ? <p className="form-error" role="alert" aria-live="assertive">{error}</p> : null}
 
       <div className="form-step-actions">
         {step === 1 ? (
           <button className="button button-primary" type="button" onClick={goToNextStep}>ادامه <span aria-hidden="true">←</span></button>
         ) : (
           <>
-            <button className="button button-secondary" type="button" onClick={() => { setNotice(""); setStep(1); }}>بازگشت</button>
-            <button className="button button-primary" type="submit">بررسی اطلاعات <span aria-hidden="true">←</span></button>
+            <button className="button button-secondary" type="button" disabled={submitting} onClick={() => { setError(""); setStep(1); }}>بازگشت</button>
+            <button className="button button-primary" type="submit" disabled={submitting}>
+              {submitting ? "در حال ثبت..." : "ثبت درخواست"} <span aria-hidden="true">←</span>
+            </button>
           </>
         )}
-        <span className="form-footnote">هیچ اطلاعاتی در این نسخه ارسال یا ذخیره نمی‌شود.</span>
+        <span className="form-footnote">اطلاعات تماس سرپرست برای پیگیری درخواست ضروری است؛ اطلاعات حساس دیگری دریافت نمی‌شود.</span>
       </div>
     </form>
   );

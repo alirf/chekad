@@ -18,7 +18,8 @@ class Student(Base):
     id = Column(Integer, primary_key=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
-    phone = Column(String(20), nullable=False, index=True)
+    # Student contact details are not requested in the public application flow.
+    phone = Column(String(20), nullable=True, index=True)
     email = Column(String(255))
     grade = Column(String(20))
     field = Column(String(20), nullable=False)  # physics|computer
@@ -53,6 +54,10 @@ class MentorshipApplication(Base):
     student_note = Column(Text)
     admin_note = Column(Text)
     reject_reason = Column(Text)
+    # Nullable for records created before explicit guardian consent was added.
+    guardian_consent_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_notice_version = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
@@ -109,6 +114,9 @@ class TutoringApplication(Base):
     status = Column(String(30), default="new", nullable=False, index=True)
     admin_note = Column(Text)
     reject_reason = Column(Text)
+    guardian_consent_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_accepted_at = Column(DateTime(timezone=True), nullable=True)
+    privacy_notice_version = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 

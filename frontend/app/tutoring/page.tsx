@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Breadcrumbs, CtaBanner, FaqList, FeatureList, PageIntro, SectionHeading } from "../../components/site-ui";
 import { RemotePeople } from "../../components/remote-people";
 import { RequestForm } from "../../components/request-form";
+import { isPublicApplicationIntakeEnabled } from "../../lib/public-intake";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "کلاس خصوصی المپیاد",
@@ -15,6 +18,8 @@ const faqs = [
 ];
 
 export default function TutoringPage() {
+  const intakeEnabled = isPublicApplicationIntakeEnabled();
+
   return (
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "کلاس خصوصی" }]} />
@@ -43,16 +48,16 @@ export default function TutoringPage() {
           <div className="request-aside">
             <span className="eyebrow">YOUR LEARNING NEED</span>
             <h2>موضوعی که می‌خواهی بهتر بفهمی چیست؟</h2>
-            <p>رشته و موضوع آموزشی موردنیازت را مشخص کن تا فرایند درخواست کلاس خصوصی پس از فعال‌شدن API تکمیل شود.</p>
-            <div className="notice-panel"><strong>ثبت درخواست غیرفعال است</strong><p>فرم در این نسخه فقط رابط کاربری و اعتبارسنجی اولیه دارد و اطلاعاتی به سرور ارسال نمی‌کند.</p></div>
+            <p>رشته و موضوع آموزشی موردنیازت را مشخص کن تا فرایند درخواست کلاس خصوصی بررسی شود.</p>
+            <div className="notice-panel"><strong>حریم خصوصی دانش‌آموز</strong><p>در نسخه فعلی، فرم توسط ولی یا سرپرست تکمیل می‌شود و شماره تماس او برای پیگیری درخواست دریافت خواهد شد.</p></div>
           </div>
-          <RequestForm kind="tutoring" />
+          <RequestForm kind="tutoring" enabled={intakeEnabled} />
         </div>
       </section>
       <section className="faq-section">
         <div className="container"><SectionHeading eyebrow="FAQ" title="پرسش‌های متداول" /><FaqList items={faqs} /></div>
       </section>
-      <CtaBanner title="یادگیری یک مبحث را جدی‌تر دنبال کن." description="نیاز آموزشی‌ات را مشخص کن و پس از فعال‌شدن ثبت درخواست، فرایند انتخاب مدرس را ادامه بده." href="/tutoring#request" buttonLabel="درخواست کلاس خصوصی" />
+      <CtaBanner title="یادگیری یک مبحث را جدی‌تر دنبال کن." description="نیاز آموزشی‌ات را مشخص کن و فرایند انتخاب مدرس را ادامه بده." href="/tutoring#request" buttonLabel="درخواست کلاس خصوصی" />
     </main>
   );
 }

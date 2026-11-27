@@ -1,10 +1,10 @@
-name: CHEKAD frontend checks
+name: CHEKAD quality checks
 
 on:
   push:
     branches:
       - main
-      - feat/chekad-public-website
+      - "feat/**"
   pull_request:
     branches:
       - main
@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   frontend:
+    name: Frontend lint, types and production build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,7 +28,30 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: ESLint
+        run: npm run lint
       - name: TypeScript validation
         run: npm run typecheck
       - name: Next.js production build
         run: npm run build
+
+  application-service:
+    name: Application API tests and migrations
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/application
+    env:
+      DB_URL: sqlite:///./application-test-default.db
+      SERVICE_NAME: application-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install application and test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run API, privacy and migration tests
+        run: pytest -q
