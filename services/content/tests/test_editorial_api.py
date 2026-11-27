@@ -120,3 +120,33 @@ def test_admin_can_delete_exam():
     response = c.delete("/admin/exams/" + str(created.json()["id"]))
     assert response.status_code == 200
     assert c.get("/exams").json() == []
+
+
+
+def test_authenticated_png_upload_is_saved_and_publicly_readable(tmp_path, monkeypatch):
+    import app.main as content_main
+    monkeypatch.setattr(content_main, "MEDIA_DIR", tmp_path)
+    app.dependency_overrides[require_admin] = admin
+    c = client()
+    # A PNG signature is sufficient for the upload's content-type gate.
+    png = b"\\x89PNG\\r\\n\\x1a\\n" + b"test-image-payload"
+    response = c.post(
+        "/admin/media",
+        files={"file": ("cover.png", png, "image/png")},
+    )
+    assert response.status_code == 201
+    url = response.json()["url"]
+    assert url.startswith("/api/content/media/")
+    filename = url.rsplit("/", 1)[-1]
+    stored = c.get("/media/" + filename)
+    assert stored.status_code == 200
+    assert stored.content == png
+
+
+def test_media_upload_rejects_non_image_files():
+    app.dependency_overrides[require_admin] = admin
+    response = client().post(
+        "/admin/media",
+        files={"file": ("not-image.txt", b"plain text", "text/plain")},
+    )
+    assert response.status_code == 415
