@@ -77,7 +77,7 @@ class PageInput(BaseModel):
                 raise ValueError("ساختار یکی از بخش‌های صفحه معتبر نیست.")
             for key in ("image_url", "url"):
                 link = block.get(key)
-                if link and not (isinstance(link, str) and (link.startswith("/api/content/media/") or urlsplit(link).scheme == "https" and urlsplit(link).netloc and not urlsplit(link).username and not urlsplit(link).password)):
+                if link and not (isinstance(link, str) and ((key == "url" and link.startswith("/") and not link.startswith("//") and "\\\\" not in link) or (link.startswith("/api/content/media/") and ".." not in link) or (urlsplit(link).scheme == "https" and urlsplit(link).netloc and not urlsplit(link).username and not urlsplit(link).password))):
                     raise ValueError("نشانی رسانه باید HTTPS یا مسیر رسانه داخلی باشد.")
         return value
 
@@ -110,8 +110,9 @@ def image_url_is_safe(value: str | None) -> None:
     if value is None or value == "":
         return
     parsed = urlsplit(value)
-    if parsed.scheme not in ("https",) or not parsed.netloc or parsed.username or parsed.password:
-        raise HTTPException(422, "نشانی تصویر باید یک URL معتبر HTTPS باشد.")
+    internal_media = value.startswith("/api/content/media/") and ".." not in value and "\\\\" not in value
+    if not internal_media and (parsed.scheme not in ("https",) or not parsed.netloc or parsed.username or parsed.password):
+        raise HTTPException(422, "نشانی تصویر باید HTTPS یا مسیر رسانه داخلی باشد.")
 
 
 def page_dict(row):
