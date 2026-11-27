@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../components/cms-page-override";
 import Link from "next/link";
 import { Breadcrumbs, CtaBanner, FaqList, FeatureList, PageIntro, SectionHeading } from "../../components/site-ui";
 import { RemotePeople } from "../../components/remote-people";
@@ -17,6 +18,7 @@ const faqs = [
 
 export default function MentorshipPage() {
   return (
+    <CmsPageOverride slug="mentorship">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "مشاوره و منتورینگ" }]} />
       <PageIntro eyebrow="MENTORSHIP" title="در مسیر المپیاد، فقط بیشتر نخوان؛ هوشمندانه‌تر پیش برو." description="منتورینگ چکاد برای ساختن یک مسیر روشن‌تر است؛ همراهی فردی باتجربه که کمک می‌کند هدف‌ها، برنامه و قدم بعدی را بهتر بشناسی." >
@@ -73,5 +75,6 @@ export default function MentorshipPage() {
       </section>
       <CtaBanner title="از یک گفت‌وگوی درست شروع کن." description="درخواستت را ثبت کن تا نیازت بررسی شود و مسیر همراهی مناسب پیشنهاد شود." />
     </main>
+    </CmsPageOverride>
   );
 }

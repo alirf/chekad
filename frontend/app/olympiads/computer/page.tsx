@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../../components/cms-page-override";
 import Link from "next/link";
 import { Breadcrumbs, CtaBanner, FeatureList, PageIntro, SectionHeading } from "../../../components/site-ui";
 import { RemotePeople } from "../../../components/remote-people";
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 
 export default function ComputerOlympiadPage() {
   return (
+    <CmsPageOverride slug="olympiad-computer">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "المپیاد کامپیوتر" }]} />
       <PageIntro eyebrow="COMPUTER SCIENCE OLYMPIAD" title="مسئله را بشناس؛ الگوریتم را با دقت بساز." description="المپیاد کامپیوتر با تفکر الگوریتمی، خلاقیت در طراحی راه‌حل و تحلیل دقیق مسئله گره خورده است. چکاد برای همراهی تخصصی در این مسیر فعالیت می‌کند." >
@@ -35,5 +37,6 @@ export default function ComputerOlympiadPage() {
       </section>
       <CtaBanner title="برای مسئله‌های دشوار، مسیر روشن‌تری بساز." description="از توضیح نیاز و هدف خود شروع کن تا گزینه‌های همراهی تخصصی بررسی شوند." />
     </main>
+    </CmsPageOverride>
   );
 }

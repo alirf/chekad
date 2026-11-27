@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../components/cms-page-override";
 import { Breadcrumbs, CtaBanner, FaqList, FeatureList, PageIntro, SectionHeading } from "../../components/site-ui";
 import { RemotePeople } from "../../components/remote-people";
 import { RequestForm } from "../../components/request-form";
@@ -21,6 +22,7 @@ export default function TutoringPage() {
   const intakeEnabled = isPublicApplicationIntakeEnabled();
 
   return (
+    <CmsPageOverride slug="tutoring">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "کلاس خصوصی" }]} />
       <PageIntro eyebrow="PRIVATE TUTORING" title="برای یک مبحث دشوار، آموزش دقیق و متمرکز." description="کلاس خصوصی چکاد برای زمانی است که به آموزش تخصصی، حل تمرین یا رفع اشکال در مباحث المپیاد نیاز داری." >
@@ -59,5 +61,6 @@ export default function TutoringPage() {
       </section>
       <CtaBanner title="یادگیری یک مبحث را جدی‌تر دنبال کن." description="نیاز آموزشی‌ات را مشخص کن و فرایند انتخاب مدرس را ادامه بده." href="/tutoring#request" buttonLabel="درخواست کلاس خصوصی" />
     </main>
+    </CmsPageOverride>
   );
 }

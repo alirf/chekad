@@ -10,6 +10,9 @@ export interface PublicPerson {
   achievements?: string | null;
   specialties?: string | null;
   experience?: string | null;
+  image_url?: string | null;
+  medals?: string | null;
+  education?: string | null;
 }
 
 export interface PublicApplicationPayload {

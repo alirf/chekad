@@ -78,11 +78,14 @@ export function RemotePeople({
 
         return (
           <article className="person-card" key={person.id}>
-            <div className="person-avatar" aria-hidden="true">{person.first_name.slice(0, 1)}</div>
+            {person.image_url ? <img src={person.image_url} alt={"تصویر " + name} className="person-avatar-image" loading="lazy" /> : <div className="person-avatar" aria-hidden="true">{person.first_name.slice(0, 1)}</div>}
             <div className="person-content">
               <span className="person-field">{fieldLabel}</span>
               <h3>{name}</h3>
               {description ? <p>{description}</p> : <p>اطلاعات تکمیلی این پروفایل در حال آماده‌سازی است.</p>}
+              {person.education ? <p className="person-achievement">تحصیلات: {person.education}</p> : null}
+              {person.experience ? <p className="person-achievement">تجربه: {person.experience}</p> : null}
+              {person.medals ? <p className="person-achievement">مدال‌ها: {person.medals}</p> : null}
               {kind === "mentors" && person.achievements ? (
                 <p className="person-achievement">{person.achievements}</p>
               ) : null}

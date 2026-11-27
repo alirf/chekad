@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../../components/cms-page-override";
 import Link from "next/link";
 import { Breadcrumbs, CtaBanner, FeatureList, PageIntro, SectionHeading } from "../../../components/site-ui";
 import { RemotePeople } from "../../../components/remote-people";
@@ -10,6 +11,7 @@ export const metadata: Metadata = {
 
 export default function PhysicsOlympiadPage() {
   return (
+    <CmsPageOverride slug="olympiad-physics">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "المپیاد فیزیک" }]} />
       <PageIntro eyebrow="PHYSICS OLYMPIAD" title="فیزیک را عمیق‌تر بفهم؛ مسئله‌ها را دقیق‌تر حل کن." description="مسیر المپیاد فیزیک به فهم مفهومی، مدل‌سازی و صبر در مواجهه با مسئله‌های چندمرحله‌ای نیاز دارد. چکاد برای همراهی در این مسیر طراحی شده است." >
@@ -35,5 +37,6 @@ export default function PhysicsOlympiadPage() {
       </section>
       <CtaBanner title="مسیر فیزیکت را با شناخت بهتر شروع کن." description="نیاز و هدف خود را توضیح بده تا برای همراهی تخصصی بررسی شود." />
     </main>
+    </CmsPageOverride>
   );
 }
