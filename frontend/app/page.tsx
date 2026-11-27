@@ -160,6 +160,17 @@ export default function Home() {
                 <p>همراهی حرفه‌ای در مسیر المپیاد فیزیک</p>
               </div>
               <span className="home-promo-arrow" aria-hidden="true">←</span>
+              <span className="home-promo-art home-promo-art-physics" aria-hidden="true">
+                <svg viewBox="0 0 128 88" fill="none">
+                  <ellipse cx="64" cy="44" rx="51" ry="17" stroke="currentColor" strokeWidth="2.5" transform="rotate(-27 64 44)" />
+                  <ellipse cx="64" cy="44" rx="51" ry="17" stroke="currentColor" strokeWidth="2.5" transform="rotate(27 64 44)" />
+                  <ellipse cx="64" cy="44" rx="17" ry="51" stroke="currentColor" strokeWidth="2.5" />
+                  <circle cx="64" cy="44" r="7" fill="#ffb02e" />
+                  <circle cx="16" cy="29" r="4" fill="#8bd3ff" />
+                  <circle cx="106" cy="64" r="4" fill="#8bd3ff" />
+                  <circle cx="78" cy="1" r="3" fill="#ffb02e" />
+                </svg>
+              </span>
             </Link>
             <Link href="/olympiads/computer" className="home-promo-card home-promo-computer">
               <div className="home-promo-copy">
@@ -167,6 +178,16 @@ export default function Home() {
                 <p>آماده‌سازی تخصصی برای موفقیت در المپیاد کامپیوتر</p>
               </div>
               <span className="home-promo-arrow" aria-hidden="true">←</span>
+              <span className="home-promo-art home-promo-art-computer" aria-hidden="true">
+                <svg viewBox="0 0 128 88" fill="none">
+                  <rect x="17" y="9" width="94" height="59" rx="7" stroke="currentColor" strokeWidth="4" />
+                  <path d="M27 20h74v37H27z" fill="#0b315a" fillOpacity=".56" />
+                  <path d="m48 31-10 8 10 8m32-16 10 8-10 8m-8-12-8 9" stroke="#91d5ff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M8 74h112l-8 8H16l-8-8Z" fill="currentColor" />
+                  <path d="M56 74h16l3 4H53l3-4Z" fill="#0b315a" />
+                  <circle cx="101" cy="15" r="3" fill="#ffb02e" />
+                </svg>
+              </span>
             </Link>
           </div>
         </section>
