@@ -66,3 +66,23 @@ def test_reject_insecure_profile_image_url():
     app.dependency_overrides[require_admin] = admin
     payload = {"first_name": "Test", "last_name": "Mentor", "field": "computer", "image_url": "http://example.com/a.jpg"}
     assert client().post("/admin/mentors", json=payload).status_code == 422
+
+
+
+def test_admin_can_manage_tutors_and_public_profile_status():
+    app.dependency_overrides[require_admin] = admin
+    c = client()
+    payload = {
+        "first_name": "Test", "last_name": "Tutor", "field": "computer",
+        "bio": "Algorithms", "specialties": "Dynamic programming",
+        "status": "inactive", "is_public": True,
+    }
+    created = c.post("/admin/tutors", json=payload)
+    assert created.status_code == 201
+    assert c.get("/admin/tutors").json()[0]["specialties"] == "Dynamic programming"
+    assert c.get("/tutors").json() == []
+    payload["status"] = "active"
+    updated = c.put("/admin/tutors/" + str(created.json()["id"]), json=payload)
+    assert updated.status_code == 200
+    assert len(c.get("/tutors").json()) == 1
+    assert c.delete("/admin/tutors/" + str(created.json()["id"])).status_code == 200
