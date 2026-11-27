@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { fetchPublicPeople, type OlympiadField, type PeopleKind, type PublicPerson } from "../lib/api";
 import { EmptyState } from "./site-ui";
@@ -74,6 +75,9 @@ export function RemotePeople({
         const name = person.first_name + " " + person.last_name;
         const fieldLabel = fieldLabels[person.field];
         const description = person.bio || person.specialties || person.experience;
+        const actionHref = kind === "mentors" ? "/mentorship/apply" : "/tutoring#request";
+        const actionLabel = kind === "mentors" ? "درخواست همراهی" : "درخواست کلاس خصوصی";
+
         return (
           <article className="person-card" key={person.id}>
             <div className="person-avatar" aria-hidden="true">{person.first_name.slice(0, 1)}</div>
@@ -87,6 +91,7 @@ export function RemotePeople({
               {kind === "tutors" && person.specialties ? (
                 <p className="person-achievement">زمینه‌های تخصصی: {person.specialties}</p>
               ) : null}
+              <Link className="person-link" href={actionHref}>{actionLabel} <span aria-hidden="true">←</span></Link>
             </div>
           </article>
         );

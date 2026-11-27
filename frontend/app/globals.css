@@ -374,3 +374,25 @@ img, svg { max-width: 100%; }
   .mobile-action-bar > div { width:min(var(--container),100%); margin-inline:auto; display:grid; grid-template-columns:1.35fr .65fr; gap:9px; }
   .mobile-action-bar .button { min-height:46px; }
 }
+
+
+.person-link { display:inline-flex; align-items:center; gap:9px; margin-top:12px; color:#8edbd5; font-size:11px; font-weight:800; }
+.person-link span { transition:transform .2s ease; }
+.person-link:hover span { transform:translateX(-4px); }
+.form-progress { display:flex; align-items:center; gap:12px; margin:0 0 25px; }
+.form-progress > i { height:1px; flex:1; background:#e2e8f0; }
+.form-progress > i.is-complete { background:#7ab9b6; }
+.form-progress-item { display:flex; align-items:center; gap:8px; color:#9aa6b5; font-size:10px; white-space:nowrap; }
+.form-progress-item span { width:27px; height:27px; display:grid; place-items:center; border:1px solid #dfe6ef; border-radius:50%; font:11px monospace; }
+.form-progress-item.is-active { color:var(--blue); font-weight:800; }
+.form-progress-item.is-active span { border-color:var(--blue); color:var(--blue); background:#f0f5ff; }
+.form-progress-item.is-complete { color:#188c88; }
+.form-progress-item.is-complete span { border-color:#a9d8d4; color:#188c88; background:#edfaf8; }
+.form-step-panel { min-height:215px; align-content:start; }
+.form-step-actions { display:flex; align-items:center; flex-wrap:wrap; gap:11px; margin-top:24px; }
+@media (max-width:680px) {
+  .form-step-panel { min-height:0; }
+  .form-step-actions { align-items:flex-start; flex-direction:column; }
+  .form-progress { gap:8px; }
+  .form-progress-item { gap:5px; font-size:9px; }
+}
