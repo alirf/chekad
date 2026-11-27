@@ -92,9 +92,21 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    void load(kind);
-    // load is intentionally called when the selected content type changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let active = true;
+    fetch(endpoints[kind], { credentials: "same-origin", cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(response.status === 401 ? "ابتدا وارد پنل مدیریت شوید." : "دریافت اطلاعات ناموفق بود.");
+        }
+        return response.json();
+      })
+      .then((data: unknown) => {
+        if (active) setRows(Array.isArray(data) ? data as Row[] : []);
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(cause instanceof Error ? cause.message : "خطای ارتباط");
+      });
+    return () => { active = false; };
   }, [kind]);
 
   function choose(row: Row) {
