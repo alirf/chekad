@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Breadcrumbs, EmptyState } from "../../../components/site-ui";
+import { MarkdownContent } from "../../../components/markdown-content";
 
 type Article = { title: string; excerpt: string; body: string; category: string; cover_image_url?: string | null; published_at?: string | null };
 
