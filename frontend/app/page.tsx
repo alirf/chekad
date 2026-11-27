@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CmsPageOverride } from "../components/cms-page-override";
 import { OlympiadCard, SectionHeading, ServiceCard, CtaBanner, EmptyState } from "../components/site-ui";
 import { RemotePeople } from "../components/remote-people";
 
@@ -12,6 +13,7 @@ const steps = [
 
 export default function Home() {
   return (
+    <CmsPageOverride slug="home">
     <main id="main-content">
       <section className="hero-section">
         <div className="hero-grid-pattern" aria-hidden="true" />
@@ -124,5 +126,6 @@ export default function Home() {
 
       <CtaBanner title="برای مسیر المپیادت، یک همراه متخصص داشته باش." description="از شناخت نیازت شروع کن. درخواستت را ثبت کن تا مسیر همراهی مناسب بررسی شود." />
     </main>
+    </CmsPageOverride>
   );
 }
