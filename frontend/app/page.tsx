@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import "./home-redesign.css";
 import Link from "next/link";
 import { CmsPageOverride } from "../components/cms-page-override";
-import { HomeServiceFinder } from "../components/home-service-finder";
 import { RemotePeople } from "../components/remote-people";
 
 export const metadata: Metadata = {
-  title: "چکاد | منتورینگ و کلاس خصوصی المپیاد فیزیک و کامپیوتر",
+  title: "چکاد | همراه مطمئن شما در مسیر المپیاد",
   description:
-    "چکاد؛ همراه تخصصی دانش‌آموزان المپیاد فیزیک و کامپیوتر با خدمات منتورینگ، برنامه‌ریزی، پیگیری مسیر و کلاس خصوصی تخصصی.",
+    "چکاد همراه دانش‌آموزان المپیاد فیزیک و کامپیوتر است؛ با منتورینگ تخصصی، کلاس خصوصی و برنامه‌ریزی متناسب با نیاز هر دانش‌آموز.",
   openGraph: {
-    title: "چکاد | مسیر المپیاد را آگاهانه پیش ببر",
+    title: "چکاد | همراه مطمئن شما در مسیر المپیاد",
     description:
       "منتورینگ و کلاس خصوصی تخصصی برای دانش‌آموزان المپیاد فیزیک و کامپیوتر.",
     type: "website",
@@ -73,227 +72,159 @@ function Arrow() {
   return <span aria-hidden="true">←</span>;
 }
 
+function BenefitIcon({ kind }: { kind: "target" | "people" | "progress" | "shield" }) {
+  if (kind === "target") {
+    return (
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 5 41 12v11c0 10-7 16-17 20C14 39 7 33 7 23V12L24 5Z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+        <path d="m16 24 5 5 11-12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (kind === "people") {
+    return (
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="14" r="7" fill="currentColor" />
+        <circle cx="10" cy="18" r="5" fill="currentColor" opacity=".8" />
+        <circle cx="38" cy="18" r="5" fill="currentColor" opacity=".8" />
+        <path d="M10 39c0-8 5-13 14-13s14 5 14 13v2H10v-2Z" fill="currentColor" />
+        <path d="M2 39c0-6 3-10 9-11m35 11c0-6-3-10-9-11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === "progress") {
+    return (
+      <svg viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M6 39h37" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        <path d="M10 32V24h7v8m6 0V15h7v17m6 0V8h7v24" fill="currentColor" opacity=".9" />
+        <path d="m8 17 10-7 8 4 14-9" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M34 5h6v6" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="m24 5 17 7v11c0 10-7 16-17 20C14 39 7 33 7 23V12l17-7Z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" />
+      <path d="m17 24 5 5 10-11" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export default function Home() {
   return (
     <CmsPageOverride slug="home">
       <main id="main-content" className="home-page">
         <section className="home-hero">
-          <div className="home-hero-glow home-hero-glow-one" aria-hidden="true" />
-          <div className="home-hero-glow home-hero-glow-two" aria-hidden="true" />
+          <div
+            className="home-hero-photo"
+            role="img"
+            aria-label="کوهنوردی بر فراز قله و چشم‌انداز کوهستان در طلوع آفتاب"
+          />
+          <div className="home-hero-rings" aria-hidden="true" />
           <div className="container home-hero-grid">
             <div className="home-hero-copy">
-              <div className="home-eyebrow">
-                <span className="home-eyebrow-dot" />
-                مؤسسه تخصصی المپیاد فیزیک و کامپیوتر
-              </div>
+              <span className="home-eyebrow">
+                مؤسسه مشاوره و پشتیبانی المپیادهای علمی
+              </span>
               <h1>
-                مسیر المپیاد،
+                چکاد؛ همراه مطمئن شما
                 <br />
-                <span>با فکر روشن‌تر</span>
-                <br />
-                و قدم‌های دقیق‌تر.
+                در مسیر <span>المپیاد</span>
               </h1>
               <p className="home-hero-description">
-                برای پیشرفت در المپیاد، فقط منابع بیشتر لازم نیست؛ شناخت مسیر،
-                همراهی درست و تمرین هدفمند هم اهمیت دارد. چکاد برای همین بخش از
-                مسیر کنار دانش‌آموز است.
+                منتورینگ تخصصی، کلاس‌های خصوصی و برنامه‌ریزی حرفه‌ای برای موفقیت
+                در المپیاد فیزیک و کامپیوتر.
               </p>
               <div className="home-hero-actions">
                 <Link href="/mentorship/apply" className="button button-primary button-large">
-                  شروع با منتورینگ <Arrow />
+                  شروع مسیر با چکاد <Arrow />
                 </Link>
-                <Link href="/tutoring" className="button button-secondary button-large">
-                  آشنایی با کلاس خصوصی
+                <Link href="/mentorship" className="button button-secondary button-large">
+                  معرفی خدمات <span aria-hidden="true">▷</span>
                 </Link>
               </div>
-              <div className="home-hero-proof" aria-label="حوزه‌های فعالیت چکاد">
-                <span><i className="home-proof-dot home-proof-dot-orange" /> فیزیک</span>
-                <span><i className="home-proof-dot home-proof-dot-teal" /> کامپیوتر</span>
-                <span className="home-proof-separator" />
-                <span className="home-proof-note">تمرکز تخصصی، نه محتوای پراکنده</span>
+              <div className="home-hero-dots" aria-hidden="true">
+                <span className="is-active" />
+                <span />
+                <span />
               </div>
-            </div>
-
-            <div className="home-hero-visual">
-              <div className="home-art-orbit home-art-orbit-one" />
-              <div className="home-art-orbit home-art-orbit-two" />
-              <div className="home-art-tag home-art-tag-top">CHEKAD / OLYMPIAD PATH</div>
-              <div className="home-mountain-art" aria-hidden="true">
-                <svg viewBox="0 0 620 470" role="presentation">
-                  <defs>
-                    <linearGradient id="homeMountain" x1="0" x2="1" y1="0" y2="1">
-                      <stop offset="0" stopColor="#284d78" />
-                      <stop offset="1" stopColor="#102744" />
-                    </linearGradient>
-                    <linearGradient id="homeTrail" x1="0" x2="1" y1="1" y2="0">
-                      <stop offset="0" stopColor="#e99a37" />
-                      <stop offset="1" stopColor="#ffc15a" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="430" cy="111" r="72" fill="#f3ad45" opacity=".18" />
-                  <circle cx="430" cy="111" r="48" fill="#f3ad45" opacity=".22" />
-                  <path d="M66 386 228 198l59 56 105-148 69 94 52-56 58 76 41 166Z" fill="url(#homeMountain)" />
-                  <path d="m228 198 59 56 105-148 69 94-77-34-48-53-77 115Z" fill="#315b88" opacity=".75" />
-                  <path d="m105 366 134-126 43 26 111-138" fill="none" stroke="#fff" strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M111 366c108-10 164-37 214-80 46-40 70-79 103-155" fill="none" stroke="url(#homeTrail)" strokeWidth="13" strokeLinecap="round" />
-                  <path d="M428 111 410 77l21-18 25 18-12 34Z" fill="#fff" opacity=".95" />
-                  <path d="M393 61 434 39l43 22-43 22Z" fill="#102744" />
-                  <path d="M413 76v30M455 76v30" stroke="#102744" strokeWidth="5" strokeLinecap="round" />
-                  <path d="M455 106c0 11-14 11-14 0 0-8 7-14 7-14s7 6 7 14Z" fill="#102744" />
-                  <circle cx="111" cy="366" r="10" fill="#e99a37" stroke="#fff" strokeWidth="5" />
-                  <circle cx="428" cy="111" r="10" fill="#e99a37" stroke="#fff" strokeWidth="5" />
-                  <path d="M82 411h456" stroke="#b8c6d6" strokeWidth="1.5" opacity=".6" />
-                  <path d="M120 411v10M500 411v10" stroke="#b8c6d6" strokeWidth="1.5" opacity=".6" />
-                  <text x="84" y="436" fill="#6c829c" fontSize="12" fontFamily="monospace">START</text>
-                  <text x="493" y="436" fill="#6c829c" fontSize="12" fontFamily="monospace">NEXT</text>
-                </svg>
-              </div>
-              <div className="home-art-label home-art-label-left">
-                <span>01</span><strong>شناخت مسیر</strong>
-              </div>
-              <div className="home-art-label home-art-label-right">
-                <span>02</span><strong>حرکت هدفمند</strong>
-              </div>
-              <div className="home-hero-card">
-                <div className="home-hero-card-mark">C.</div>
-                <div>
-                  <strong>هر مسیر، نقطه شروع خودش را دارد.</strong>
-                  <span>با شناخت نیازت، قدم بعدی را انتخاب کن.</span>
-                </div>
-                <span className="home-hero-card-arrow" aria-hidden="true">↙</span>
-              </div>
-            </div>
-          </div>
-          <div className="home-hero-bottom">
-            <div className="container home-hero-bottom-inner">
-              <span>PHYSICS OLYMPIAD</span>
-              <i />
-              <span>COMPUTER SCIENCE</span>
-              <i />
-              <span>PERSONAL GUIDANCE</span>
-              <b>CHEKAD</b>
             </div>
           </div>
         </section>
 
-        <section className="home-start-section" aria-label="انتخاب خدمت">
-          <div className="container home-start-layout">
-            <div className="home-start-copy">
-              <span className="home-section-kicker">از همین‌جا شروع کن</span>
-              <h2>اول نیازت را بشناس؛<br /><span>بعد مسیر مناسب را انتخاب کن.</span></h2>
-              <p>منتورینگ و کلاس خصوصی دو خدمت متفاوت‌اند. انتخاب درست کمک می‌کند از ابتدا بدانی چه نوع همراهی برایت مناسب‌تر است.</p>
-              <div className="home-start-links">
-                <Link href="/mentorship">منتورینگ چیست؟ <Arrow /></Link>
-                <Link href="/tutoring">کلاس خصوصی چیست؟ <Arrow /></Link>
+        <section className="home-olympiad-promo" aria-label="مسیرهای تخصصی چکاد">
+          <div className="container home-olympiad-promo-grid">
+            <Link href="/olympiads/physics" className="home-promo-card home-promo-physics">
+              <div className="home-promo-copy">
+                <h2>المپیاد فیزیک</h2>
+                <p>همراهی حرفه‌ای در مسیر المپیاد فیزیک</p>
               </div>
-            </div>
-            <HomeServiceFinder />
+              <span className="home-promo-arrow" aria-hidden="true">←</span>
+            </Link>
+            <Link href="/olympiads/computer" className="home-promo-card home-promo-computer">
+              <div className="home-promo-copy">
+                <h2>المپیاد کامپیوتر</h2>
+                <p>آماده‌سازی تخصصی برای موفقیت در المپیاد کامپیوتر</p>
+              </div>
+              <span className="home-promo-arrow" aria-hidden="true">←</span>
+            </Link>
           </div>
         </section>
 
-        <section className="home-services-section">
+        <section className="home-why-section">
           <div className="container">
-            <div className="home-section-heading">
-              <div>
-                <span className="home-section-kicker">خدمات اصلی چکاد</span>
-                <h2>دو نیاز متفاوت؛<br /><span>دو راهکار تخصصی.</span></h2>
-              </div>
-              <p>به‌جای ارائه یک نسخه یکسان برای همه، نوع خدمت را بر اساس مسئله‌ای که می‌خواهی حل کنی انتخاب کن.</p>
+            <div className="home-why-heading">
+              <span className="home-section-kicker">چرا چکاد؟</span>
+              <h2>انتخابی حرفه‌ای برای مسیر المپیاد</h2>
             </div>
-            <div className="home-service-grid">
-              <article className="home-service-card home-service-mentorship">
-                <div className="home-service-card-top">
-                  <span className="home-service-number">01 / GUIDANCE</span>
-                  <span className="home-service-icon" aria-hidden="true">⌁</span>
-                </div>
-                <div className="home-service-art home-service-art-path" aria-hidden="true">
-                  <svg viewBox="0 0 300 135" role="presentation">
-                    <path d="M15 111C75 111 73 79 126 79s54-51 108-51h48" fill="none" stroke="#2d5a89" strokeWidth="3" strokeDasharray="5 8" />
-                    <path d="M15 111C75 111 73 79 126 79s54-51 108-51h48" fill="none" stroke="#e9a03b" strokeWidth="8" strokeLinecap="round" strokeDasharray="1 1000" />
-                    <circle cx="15" cy="111" r="8" fill="#e9a03b" />
-                    <circle cx="126" cy="79" r="8" fill="#1d496f" stroke="#fff" strokeWidth="4" />
-                    <circle cx="282" cy="28" r="8" fill="#1d496f" stroke="#fff" strokeWidth="4" />
-                    <path d="M253 18h29V47" fill="none" stroke="#1d496f" strokeWidth="2" opacity=".45" />
-                  </svg>
-                </div>
-                <span className="home-service-eyebrow">MENTORSHIP</span>
-                <h3>منتورینگ و همراهی مسیر</h3>
-                <p>برای وقتی که می‌خواهی مسیر المپیاد را منظم‌تر پیش ببری، اولویت‌ها را بشناسی و روند پیشرفتت را پیگیری کنی.</p>
-                <ul>
-                  <li>شناخت وضعیت و هدف فعلی</li>
-                  <li>برنامه‌ریزی متناسب با شرایط</li>
-                  <li>گفت‌وگو و پیگیری مسیر</li>
-                </ul>
-                <Link href="/mentorship" className="home-service-link">جزئیات منتورینگ <Arrow /></Link>
+            <div className="home-benefits-grid">
+              <article className="home-benefit-card">
+                <span className="home-benefit-icon home-benefit-orange"><BenefitIcon kind="target" /></span>
+                <h3>آموزش هدفمند</h3>
+                <p>برنامه‌ریزی علمی و متناسب با نیاز هر دانش‌آموز</p>
               </article>
-
-              <article className="home-service-card home-service-tutoring">
-                <div className="home-service-card-top">
-                  <span className="home-service-number">02 / DEEP LEARNING</span>
-                  <span className="home-service-icon" aria-hidden="true">∑</span>
-                </div>
-                <div className="home-service-art home-service-art-equation" aria-hidden="true">
-                  <svg viewBox="0 0 300 135" role="presentation">
-                    <path d="M37 24h54M37 24v89M37 113h54M116 29h32l-29 37 29 37h-32M180 24h79M180 68h58M180 112h79" fill="none" stroke="#1d496f" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="272" cy="24" r="8" fill="#e9a03b" />
-                    <circle cx="259" cy="112" r="8" fill="#e9a03b" />
-                  </svg>
-                </div>
-                <span className="home-service-eyebrow">PRIVATE TUTORING</span>
-                <h3>کلاس خصوصی تخصصی</h3>
-                <p>برای وقتی که می‌خواهی یک مبحث را عمیق‌تر یاد بگیری، راه‌حل‌ها را بررسی کنی یا در موضوعی مشخص رفع اشکال داشته باشی.</p>
-                <ul>
-                  <li>آموزش مباحث فیزیک و کامپیوتر</li>
-                  <li>حل تمرین و بررسی راه‌حل‌ها</li>
-                  <li>تناسب مدرس با نیاز علمی</li>
-                </ul>
-                <Link href="/tutoring" className="home-service-link">جزئیات کلاس خصوصی <Arrow /></Link>
+              <article className="home-benefit-card">
+                <span className="home-benefit-icon"><BenefitIcon kind="people" /></span>
+                <h3>مدرسان و منتورهای باتجربه</h3>
+                <p>انتخاب همراه آموزشی بر اساس نیاز و هدف دانش‌آموز</p>
+              </article>
+              <article className="home-benefit-card">
+                <span className="home-benefit-icon"><BenefitIcon kind="progress" /></span>
+                <h3>پیگیری پیشرفت</h3>
+                <p>ارزیابی منظم، بازبینی برنامه و گزارش روند پیشرفت</p>
+              </article>
+              <article className="home-benefit-card">
+                <span className="home-benefit-icon home-benefit-orange"><BenefitIcon kind="shield" /></span>
+                <h3>انتخاب منتور مناسب</h3>
+                <p>بررسی سوابق و تخصص افراد پیش از معرفی به دانش‌آموز</p>
               </article>
             </div>
-            <div className="home-service-note">
-              <span aria-hidden="true">i</span>
-              <p><strong>یک نکته مهم:</strong> منتورینگ جای کلاس خصوصی را نمی‌گیرد و کلاس خصوصی هم جای همراهی بلندمدت را. هر دو خدمت می‌توانند مستقل و بر اساس نیاز دانش‌آموز انتخاب شوند.</p>
-            </div>
           </div>
         </section>
 
-        <section className="home-olympiads-section">
-          <div className="container">
-            <div className="home-section-heading home-section-heading-light">
-              <div>
-                <span className="home-section-kicker">دو حوزه تخصصی</span>
-                <h2>هر رشته، منطق خودش را دارد.</h2>
+        <section className="home-feature-section">
+          <div className="container home-feature-layout">
+            <div
+              className="home-feature-image"
+              role="img"
+              aria-label="کتاب‌های فیزیک و علوم کامپیوتر و دفتر یادداشت روی میز مطالعه"
+            />
+            <div className="home-feature-copy">
+              <span className="home-section-kicker">خدمات ما</span>
+              <h2>دو مسیر، یک هدف: موفقیت در المپیاد</h2>
+              <p>
+                در چکاد، هم منتورینگ تخصصی و هم کلاس‌های خصوصی با توجه به نیاز و
+                سطح دانش‌آموز ارائه می‌شوند تا مسیر یادگیری و پیشرفت روشن‌تر و
+                منظم‌تر دنبال شود.
+              </p>
+              <div className="home-feature-actions">
+                <Link href="/tutoring" className="button button-outline-orange">
+                  مشاهده جزئیات کلاس خصوصی <Arrow />
+                </Link>
+                <Link href="/mentorship" className="button button-outline-blue">
+                  مشاهده جزئیات منتورینگ <Arrow />
+                </Link>
               </div>
-              <p>چکاد در فاز فعلی روی دو مسیر متمرکز است تا خدمات و همراهی، متناسب با ویژگی‌های هر المپیاد شکل بگیرد.</p>
-            </div>
-            <div className="home-olympiad-grid">
-              <Link href="/olympiads/physics" className="home-olympiad-card home-olympiad-physics">
-                <div className="home-olympiad-symbol" aria-hidden="true">
-                  <svg viewBox="0 0 150 150" role="presentation">
-                    <circle cx="75" cy="75" r="20" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <ellipse cx="75" cy="75" rx="66" ry="25" fill="none" stroke="currentColor" strokeWidth="2" transform="rotate(-32 75 75)" />
-                    <ellipse cx="75" cy="75" rx="66" ry="25" fill="none" stroke="currentColor" strokeWidth="2" transform="rotate(32 75 75)" />
-                    <circle cx="75" cy="75" r="5" fill="#e9a03b" />
-                  </svg>
-                </div>
-                <span>PHYSICS OLYMPIAD</span>
-                <h3>المپیاد فیزیک</h3>
-                <p>فهم مفهومی، مدل‌سازی و استدلال برای رسیدن به راه‌حل.</p>
-                <b>شناخت مسیر فیزیک <Arrow /></b>
-              </Link>
-              <Link href="/olympiads/computer" className="home-olympiad-card home-olympiad-computer">
-                <div className="home-olympiad-symbol" aria-hidden="true">
-                  <svg viewBox="0 0 150 150" role="presentation">
-                    <rect x="22" y="22" width="106" height="106" rx="20" fill="none" stroke="currentColor" strokeWidth="2" />
-                    <path d="M44 52h24M44 75h14M44 98h31M82 52h24M82 75h15M82 98h24" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-                    <circle cx="113" cy="112" r="5" fill="#e9a03b" />
-                  </svg>
-                </div>
-                <span>COMPUTER SCIENCE OLYMPIAD</span>
-                <h3>المپیاد کامپیوتر</h3>
-                <p>تفکر الگوریتمی، تجزیه مسئله و تحلیل راه‌حل.</p>
-                <b>شناخت مسیر کامپیوتر <Arrow /></b>
-              </Link>
             </div>
           </div>
         </section>
