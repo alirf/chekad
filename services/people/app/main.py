@@ -119,6 +119,14 @@ def update_mentor(person_id: int, payload: PersonInput, db: Session = Depends(ge
     return person_dict(row)
 
 
+@app.delete("/admin/mentors/{person_id}")
+def delete_mentor(person_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.get(models.Mentor, person_id)
+    if not row: raise HTTPException(404, "mentor not found")
+    db.delete(row); db.commit()
+    return {"deleted": True}
+
+
 @app.get("/admin/tutors")
 def admin_tutors(db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     return [person_dict(p) for p in db.query(models.Tutor).order_by(models.Tutor.id.desc()).all()]
@@ -140,3 +148,11 @@ def update_tutor(person_id: int, payload: PersonInput, db: Session = Depends(get
     for key, value in payload.model_dump(exclude={"achievements"}).items(): setattr(row, key, value)
     db.commit(); db.refresh(row)
     return person_dict(row)
+
+
+@app.delete("/admin/tutors/{person_id}")
+def delete_tutor(person_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.get(models.Tutor, person_id)
+    if not row: raise HTTPException(404, "tutor not found")
+    db.delete(row); db.commit()
+    return {"deleted": True}
