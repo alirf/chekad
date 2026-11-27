@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./home-redesign.css";
 import Link from "next/link";
 import { CmsPageOverride } from "../components/cms-page-override";
 import { HomeServiceFinder } from "../components/home-service-finder";
