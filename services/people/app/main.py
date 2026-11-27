@@ -61,12 +61,13 @@ def safe_image(value):
     from urllib.parse import urlsplit
     if value:
         parsed = urlsplit(value)
-        if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password:
-            raise HTTPException(422, "نشانی تصویر باید HTTPS معتبر باشد.")
+        internal_media = value.startswith("/api/content/media/") and ".." not in value
+        if not internal_media and (parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password):
+            raise HTTPException(422, "نشانی تصویر باید HTTPS معتبر یا رسانه بارگذاری‌شده چکاد باشد.")
 
 
 def list_people(db, model, field):
-    q = db.query(model).filter(model.is_public == True)
+    q = db.query(model).filter(model.is_public == True, model.status == "active")
     if field in ("physics", "computer"): q = q.filter(model.field == field)
     return [person_dict(p) for p in q.order_by(model.id).all()]
 
