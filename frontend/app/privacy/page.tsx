@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../components/cms-page-override";
 import { Breadcrumbs, PageIntro } from "../../components/site-ui";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default function PrivacyPage() {
   const privacyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(privacyCandidate) ? privacyCandidate : "";
 
   return (
+    <CmsPageOverride slug="privacy">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "حریم خصوصی" }]} />
       <PageIntro eyebrow="PRIVACY NOTICE · 2026-11-27-v1" title="اطلاعاتت را فقط به‌اندازه نیاز مسیر دریافت می‌کنیم." description="این اطلاعیه توضیح می‌دهد چکاد در زمان ثبت درخواست منتورینگ یا کلاس خصوصی چه اطلاعاتی دریافت می‌کند، چرا به آن نیاز دارد و چگونه از آن نگهداری می‌کند." />
@@ -83,5 +85,6 @@ export default function PrivacyPage() {
         </div>
       </section>
     </main>
+    </CmsPageOverride>
   );
 }
