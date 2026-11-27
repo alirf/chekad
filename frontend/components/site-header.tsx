@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const serviceLinks = [
@@ -17,20 +18,14 @@ export function SiteHeader() {
       <header className="site-header">
         <div className="container header-inner">
           <Link href="/" className="brand" aria-label="چکاد، صفحه اصلی">
-            <span className="brand-symbol" aria-hidden="true">
-              <svg viewBox="0 0 64 54" fill="none">
-                <path d="M5 43 23 19l9 10 10-17 17 31H5Z" fill="#0871c9" />
-                <path d="m22 43 11-16 8 8 10-16 8 24H22Z" fill="#f5a623" />
-                <path d="m8 43 15-17 6 7 11-17 14 27H8Z" fill="#fff" opacity=".92" />
-                <path d="m26 17 9-5 10 5-10 5-9-5Z" fill="#fff" />
-                <path d="M31 21v6m9-6v6" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                <path d="m35 11 8-4 8 4-8 4-8-4Z" fill="#fff" />
-              </svg>
-            </span>
-            <span className="brand-copy">
-              <strong>چکاد</strong>
-              <small>مؤسسه مشاوره کنکور</small>
-            </span>
+            <Image
+              src="/chekad-logo-white.svg"
+              alt="لوگوی چکاد"
+              width={112}
+              height={112}
+              className="brand-logo brand-logo-header"
+              priority
+            />
           </Link>
 
           <nav className="desktop-nav" aria-label="ناوبری اصلی">
