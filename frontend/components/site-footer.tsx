@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const footerGroups = [
@@ -34,9 +35,14 @@ export function SiteFooter() {
       <div className="container">
         <div className="footer-main">
           <div className="footer-brand">
-            <Link href="/" className="brand brand-light">
-              <span className="brand-mark" aria-hidden="true">چ</span>
-              <span className="brand-copy"><strong>چکاد</strong><small>CHEKAD</small></span>
+            <Link href="/" className="brand brand-light" aria-label="چکاد، صفحه اصلی">
+              <Image
+                src="/chekad-logo.svg"
+                alt="لوگوی چکاد"
+                width={104}
+                height={104}
+                className="brand-logo brand-logo-footer"
+              />
             </Link>
             <p>
               همراهی تخصصی برای دانش‌آموزانی که مسیر المپیاد فیزیک و کامپیوتر را جدی و آگاهانه دنبال می‌کنند.

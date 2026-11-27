@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 const olympiadLinks = [
@@ -11,11 +12,14 @@ export function SiteHeader() {
       <header className="site-header">
         <div className="container header-inner">
           <Link href="/" className="brand" aria-label="چکاد، صفحه اصلی">
-            <span className="brand-mark" aria-hidden="true">چ</span>
-            <span className="brand-copy">
-              <strong>چکاد</strong>
-              <small>CHEKAD</small>
-            </span>
+            <Image
+              src="/chekad-logo.svg"
+              alt="لوگوی چکاد"
+              width={72}
+              height={72}
+              className="brand-logo"
+              priority
+            />
           </Link>
 
           <nav className="desktop-nav" aria-label="ناوبری اصلی">
