@@ -19,7 +19,7 @@ const defaults: Record<Kind, Values> = {
   pages: { slug: "", title: "", description: "", content: "", image_url: "", status: "draft" },
   mentors: { first_name: "", last_name: "", field: "physics", bio: "", achievements: "", specialties: "", experience: "", image_url: "", medals: "", education: "", capacity: "3", status: "active", is_public: "true" },
 };
-const endpoints: Record<Kind, string> = { articles: "/content/admin/articles", exams: "/content/admin/exams", pages: "/content/admin/pages", mentors: "/people/admin/mentors" };
+const endpoints: Record<Kind, string> = { articles: "/api/content/admin/articles", exams: "/api/content/admin/exams", pages: "/api/content/admin/pages", mentors: "/api/people/admin/mentors" };
 
 export default function AdminPage() {
   const [kind, setKind] = useState<Kind>("articles");
