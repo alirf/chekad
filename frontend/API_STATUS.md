@@ -104,3 +104,11 @@ A workflow file is not proof of success; inspect the resulting GitHub Actions ru
 - ESLint uses the Next 16 flat configuration and the CLI script `eslint .`; the removed `next lint` command is no longer used.
 - TypeScript remains on the existing 5.5 line; React type packages are pinned to compatible 19.2.x declarations.
 - GitHub Actions exposes the application package to pytest through `PYTHONPATH` and invokes `python -m pytest`.
+
+
+## Runtime baseline
+
+- Docker and CI use Node.js 26 LTS.
+- Frontend package engine requires Node.js >=26.
+- CI uses current Node-compatible GitHub Actions majors (checkout/setup-node/setup-python v7).
+- Node type declarations are aligned with the Node 26 runtime.
