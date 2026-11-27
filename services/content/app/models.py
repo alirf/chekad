@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String, Text
 
 from app.db import Base
 
@@ -25,7 +25,11 @@ class SitePage(Base):
     title = Column(String(240), nullable=False)
     description = Column(Text, default="", nullable=False)
     content = Column(Text, default="", nullable=False)
+    sections = Column(JSON, default=list, nullable=False)
+    layout = Column(String(24), default="standard", nullable=False)
     image_url = Column(String(1000))
+    seo_title = Column(String(240))
+    seo_description = Column(String(320))
     status = Column(String(20), default="draft", nullable=False, index=True)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
