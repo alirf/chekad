@@ -31,6 +31,12 @@ const endpoints: Record<Kind, string> = {
   mentors: "/api/people/admin/mentors",
   tutors: "/api/people/admin/tutors",
 };
+const pagePaths: Record<string, string> = {
+  home: "/", about: "/about", contact: "/contact", mentorship: "/mentorship",
+  tutoring: "/tutoring", exams: "/exams", blog: "/blog", privacy: "/privacy",
+  terms: "/terms", "olympiad-physics": "/olympiads/physics",
+  "olympiad-computer": "/olympiads/computer",
+};
 const fieldNames: Record<string, string> = {
   slug: "شناسه یکتا (انگلیسی)",
   title: "عنوان",
@@ -252,6 +258,7 @@ export default function AdminPage() {
                   {options ? <select value={values[field] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))} className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5">{options.map((option) => <option key={option} value={option}>{option}</option>)}</select> :
                   long ? <>{field === "body" && <div className="mb-2 flex flex-wrap gap-1"><button type="button" onClick={() => formatArticle("**")} className="rounded-md border px-2 py-1 text-xs">Bold</button><button type="button" onClick={() => formatArticle("*")} className="rounded-md border px-2 py-1 text-xs">Italic</button><button type="button" onClick={() => formatArticle("\n## ")} className="rounded-md border px-2 py-1 text-xs">Heading</button><button type="button" onClick={() => formatArticle("\n- ")} className="rounded-md border px-2 py-1 text-xs">List</button></div>}<textarea ref={field === "body" ? articleBodyRef : undefined} rows={field === "body" || field === "content" ? 10 : 4} value={values[field] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5" /></> :
                   <input type={field === "duration_minutes" || field === "capacity" ? "number" : field === "starts_at" ? "datetime-local" : "text"} value={values[field] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [field]: e.target.value }))} className="w-full rounded-xl border border-slate-300 px-3 py-2.5" />}
+                  {field === "slug" && kind === "pages" && <p className="mt-1 text-xs leading-6 text-blue-700">شناسه‌های ویژه برای ویرایش مسیرهای فعلی: home، about، contact، mentorship، tutoring، exams، blog، privacy، terms، olympiad-physics، olympiad-computer. سایر شناسه‌ها در مسیر /pages/ نمایش داده می‌شوند.</p>}
                   {imageField && <><input type="file" accept="image/png,image/jpeg,image/webp" className="mt-2 block w-full text-xs" onChange={(e) => { const file = e.target.files?.[0]; if (file) void uploadImage(file, (url) => setValues((v) => ({ ...v, [field]: url }))); }} /><p className="mt-1 text-xs text-slate-500">JPEG، PNG یا WebP؛ حداکثر ۵ مگابایت.</p></>}
                   {imageField && values[field] && <img src={values[field]} alt="پیش‌نمایش تصویر" className="mt-3 max-h-44 rounded-xl object-contain" />}
                 </label>;
@@ -259,7 +266,7 @@ export default function AdminPage() {
               {kind === "articles" && <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4"><p className="mb-2 text-sm font-bold text-slate-700">پیش‌نمایش نوشتار</p><div className="mb-2 text-lg font-extrabold text-slate-900">{values.title || "عنوان مقاله"}</div>{values.body ? <MarkdownContent source={values.body} /> : <p className="text-sm leading-8 text-slate-600">متن مقاله پس از نوشتن در این بخش پیش‌نمایش داده می‌شود.</p>}</div>}
               <div className="flex flex-wrap gap-2 sm:col-span-2">
                 <button disabled={busy} className="rounded-xl bg-blue-700 px-5 py-3 font-bold text-white disabled:opacity-50">{busy ? "در حال انجام..." : selected ? "ذخیره تغییرات" : "ایجاد و ذخیره"}</button>
-                {kind === "pages" && values.slug && <Link href={"/pages/" + values.slug} target="_blank" rel="noreferrer" className="rounded-xl border border-slate-300 px-5 py-3 font-bold">مشاهده صفحه عمومی</Link>}
+                {kind === "pages" && values.slug && <Link href={pagePaths[values.slug] || "/pages/" + values.slug} target="_blank" rel="noreferrer" className="rounded-xl border border-slate-300 px-5 py-3 font-bold">مشاهده صفحه عمومی</Link>}
                 {selected && <button type="button" disabled={busy} onClick={() => void removeSelected()} className="rounded-xl border border-red-200 px-5 py-3 font-bold text-red-700 disabled:opacity-50">حذف مورد</button>}
                 <button type="button" onClick={() => { setSelected(null); setValues(defaults[kind]); }} className="rounded-xl border border-slate-300 px-5 py-3 font-bold">پاک‌کردن فرم</button>
               </div>
