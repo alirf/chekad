@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../components/cms-page-override";
 import { Breadcrumbs, PageIntro } from "../../components/site-ui";
 
 export const metadata: Metadata = {
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
+    <CmsPageOverride slug="terms">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "قوانین و مقررات" }]} />
       <PageIntro eyebrow="TERMS" title="قوانین استفاده از خدمات" description="متن رسمی قوانین و شرایط خدمات چکاد پس از بررسی حقوقی در این صفحه منتشر خواهد شد." />
@@ -18,5 +20,6 @@ export default function TermsPage() {
         </div>
       </section>
     </main>
+    </CmsPageOverride>
   );
 }
