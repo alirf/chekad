@@ -28,7 +28,7 @@ export default function BlogArticlePage({ params }: { params: Promise<{ slug: st
         <div className="article-meta"><span>{article.category}</span><span>{article.published_at ? new Date(article.published_at).toLocaleDateString("fa-IR") : ""}</span></div>
         <h1>{article.title}</h1>{article.excerpt ? <p className="text-lg text-slate-600">{article.excerpt}</p> : null}
         {article.cover_image_url ? <img src={article.cover_image_url} alt="" className="my-8 w-full rounded-2xl object-cover" /> : null}
-        <div className="editorial-content">{article.body}</div>
+        <MarkdownContent source={article.body} />
       </> : null}
     </div></article></main>;
 }
