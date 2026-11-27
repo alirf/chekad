@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../components/cms-page-override";
 import { Breadcrumbs, PageIntro } from "../../components/site-ui";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export default function ContactPage() {
   const privacyEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(privacyCandidate) ? privacyCandidate : "";
 
   return (
+    <CmsPageOverride slug="contact">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "تماس با چکاد" }]} />
       <PageIntro eyebrow="CONTACT" title="در ارتباط باشیم." description="برای پیگیری درخواست و پرسش‌های مرتبط با اطلاعات شخصی، از راه ارتباطی رسمی تنظیم‌شده توسط چکاد استفاده کنید." />
@@ -32,5 +34,6 @@ export default function ContactPage() {
         </div>
       </section>
     </main>
+    </CmsPageOverride>
   );
 }
