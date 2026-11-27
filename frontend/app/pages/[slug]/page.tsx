@@ -6,7 +6,7 @@ import { MarkdownContent } from "../../../components/markdown-content";
 import { EmptyState } from "../../../components/site-ui";
 
 type Section = { type: "heading" | "text" | "image" | "features" | "cta"; title?: string; body?: string; image_url?: string; items?: string[]; button_label?: string; url?: string };
-type CmsPageData = { title: string; description?: string; content?: string; sections?: Section[]; layout?: string; image_url?: string };
+type CmsPageData = { title: string; description?: string; content?: string; sections?: Section[]; layout?: string; image_url?: string; seo_title?: string; seo_description?: string };
 export default function CmsPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
@@ -18,7 +18,15 @@ export default function CmsPage() {
     let active = true;
     fetch("/api/content/pages/" + encodeURIComponent(slug), { cache: "no-store", headers: { Accept: "application/json" } })
       .then(async (response) => { if (!response.ok) throw new Error("not found"); return response.json(); })
-      .then((data: CmsPageData) => { if (active) { setPage(data); document.title = data.title + " | چکاد"; } })
+      .then((data: CmsPageData) => { if (active) {
+        setPage(data);
+        document.title = (data.seo_title || data.title) + " | چکاد";
+        if (data.seo_description) {
+          let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+          if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
+          meta.content = data.seo_description;
+        }
+      } })
       .catch(() => { if (active) setFailed(true); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
