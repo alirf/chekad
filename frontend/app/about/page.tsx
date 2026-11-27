@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CmsPageOverride } from "../../components/cms-page-override";
 import { Breadcrumbs, PageIntro } from "../../components/site-ui";
 
 export const metadata: Metadata = {
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
 
 export default function AboutPage() {
   return (
+    <CmsPageOverride slug="about">
     <main id="main-content">
       <Breadcrumbs items={[{ href: "/", label: "خانه" }, { label: "درباره چکاد" }]} />
       <PageIntro eyebrow="ABOUT CHEKAD" title="برای مسیرهای جدی، همراهی دقیق‌تر." description="چکاد مجموعه‌ای تخصصی در حوزه المپیادهای دانش‌آموزی فیزیک و کامپیوتر است؛ با تمرکز بر منتورینگ، کلاس خصوصی، آزمون و محتوای هدفمند." />
@@ -24,5 +26,6 @@ export default function AboutPage() {
         </div>
       </section>
     </main>
+    </CmsPageOverride>
   );
 }
