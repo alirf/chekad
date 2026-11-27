@@ -163,7 +163,7 @@ export function CtaBanner({
             <h2>{title}</h2>
             <p>{description}</p>
           </div>
-          <ActionLink href={href} variant="light">{buttonLabel} <span aria-hidden="true">←</span></ActionLink>
+          <ActionLink href={href} variant="secondary">{buttonLabel} <span aria-hidden="true">←</span></ActionLink>
         </div>
       </div>
     </section>
