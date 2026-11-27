@@ -238,6 +238,15 @@ def update_page(page_id: int, payload: PageInput, db: Session = Depends(get_db),
     return page_dict(row)
 
 
+@app.delete("/admin/pages/{page_id}")
+def delete_page(page_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.get(models.SitePage, page_id)
+    if not row:
+        raise HTTPException(404, "page not found")
+    db.delete(row); db.commit()
+    return {"deleted": True}
+
+
 @app.get("/admin/articles")
 def admin_articles(db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     return [article_dict(x) for x in db.query(models.Article).order_by(models.Article.id.desc()).all()]
@@ -269,6 +278,15 @@ def update_article(article_id: int, payload: ArticleInput, db: Session = Depends
     return article_dict(row)
 
 
+@app.delete("/admin/articles/{article_id}")
+def delete_article(article_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.get(models.Article, article_id)
+    if not row:
+        raise HTTPException(404, "article not found")
+    db.delete(row); db.commit()
+    return {"deleted": True}
+
+
 @app.get("/admin/exams")
 def admin_exams(db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     return [exam_dict(x) for x in db.query(models.Exam).order_by(models.Exam.id.desc()).all()]
@@ -293,3 +311,12 @@ def update_exam(exam_id: int, payload: ExamInput, db: Session = Depends(get_db),
     for key, value in payload.model_dump().items(): setattr(row, key, value)
     db.commit(); db.refresh(row)
     return exam_dict(row)
+
+
+@app.delete("/admin/exams/{exam_id}")
+def delete_exam(exam_id: int, db: Session = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.get(models.Exam, exam_id)
+    if not row:
+        raise HTTPException(404, "exam not found")
+    db.delete(row); db.commit()
+    return {"deleted": True}
