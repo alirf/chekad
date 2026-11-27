@@ -49,7 +49,22 @@ export default function AdminInboxPage() {
     } catch(e){setError(e instanceof Error?e.message:"خطای ارتباط");}
   },[kind,status,field,q]);
 
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{
+    let active=true;
+    const params=new URLSearchParams({kind,limit:"50"});
+    if(status) params.set("status",status);
+    if(field) params.set("field",field);
+    if(q.trim()) params.set("q",q.trim());
+    fetch("/api/application/admin/applications?"+params.toString(),{credentials:"same-origin",cache:"no-store"})
+      .then(async response=>{
+        const data=await response.json();
+        if(!response.ok) throw new Error(data.detail || "دریافت درخواست‌ها انجام نشد.");
+        return data;
+      })
+      .then(data=>{if(active){setItems(data.items);setTotal(data.total);setError("");}})
+      .catch(error=>{if(active)setError(error instanceof Error?error.message:"خطای ارتباط");});
+    return ()=>{active=false;};
+  },[kind,status,field,q]);
 
   async function openDetail(item:Application){
     setError(""); setMessage("");

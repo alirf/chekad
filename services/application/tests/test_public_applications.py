@@ -33,9 +33,11 @@ def client():
     original_enabled = settings.public_applications_enabled
     original_email = settings.privacy_contact_email
     original_origin = settings.public_site_origin
+    original_terms_approved = settings.terms_approved
     settings.public_applications_enabled = True
     settings.privacy_contact_email = "privacy@example.test"
     settings.public_site_origin = "https://testserver"
+    settings.terms_approved = True
 
     def override_get_db():
         db = TestingSessionLocal()
@@ -52,6 +54,7 @@ def client():
     settings.public_applications_enabled = original_enabled
     settings.privacy_contact_email = original_email
     settings.public_site_origin = original_origin
+    settings.terms_approved = original_terms_approved
     Base.metadata.drop_all(bind=TEST_ENGINE)
 
 
