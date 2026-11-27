@@ -14,7 +14,7 @@ def upgrade() -> None:
     op.create_table(
         "site_pages",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("slug", sa.String(120), nullable=False, unique=True),
+        sa.Column("slug", sa.String(120), nullable=False),
         sa.Column("title", sa.String(240), nullable=False),
         sa.Column("description", sa.Text(), nullable=False, server_default=""),
         sa.Column("content", sa.Text(), nullable=False, server_default=""),
@@ -27,7 +27,7 @@ def upgrade() -> None:
     op.create_table(
         "articles",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("slug", sa.String(160), nullable=False, unique=True),
+        sa.Column("slug", sa.String(160), nullable=False),
         sa.Column("title", sa.String(240), nullable=False),
         sa.Column("excerpt", sa.Text(), nullable=False, server_default=""),
         sa.Column("body", sa.Text(), nullable=False, server_default=""),
