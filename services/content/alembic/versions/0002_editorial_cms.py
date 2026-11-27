@@ -22,7 +22,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(20), nullable=False, server_default="draft"),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index("ix_site_pages_slug", "site_pages", ["slug"])
+    op.create_index("ix_site_pages_slug", "site_pages", ["slug"], unique=True)
     op.create_index("ix_site_pages_status", "site_pages", ["status"])
     op.create_table(
         "articles",
@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("published_at", sa.DateTime(timezone=True)),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index("ix_articles_slug", "articles", ["slug"])
+    op.create_index("ix_articles_slug", "articles", ["slug"], unique=True)
     op.create_index("ix_articles_category", "articles", ["category"])
     op.create_index("ix_articles_status", "articles", ["status"])
     op.create_table(
@@ -56,7 +56,7 @@ def upgrade() -> None:
         sa.Column("cover_image_url", sa.String(1000)),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index("ix_exams_slug", "exams", ["slug"])
+    op.create_index("ix_exams_slug", "exams", ["slug"], unique=True)
     op.create_index("ix_exams_field", "exams", ["field"])
     op.create_index("ix_exams_status", "exams", ["status"])
 
