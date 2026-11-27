@@ -48,7 +48,7 @@ def require_public_intake() -> None:
     if (
         not settings.public_applications_enabled
         or not settings.terms_approved
-        or not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+", email)
+        or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email)
         or not secure_origin
     ):
         raise HTTPException(
