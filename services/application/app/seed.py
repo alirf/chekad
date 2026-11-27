@@ -1,12 +1,25 @@
+"""Create optional development-only mentorship package data.
+
+Run explicitly: docker compose exec -e SEED_DEMO_DATA=true application-service python -m app.seed
+"""
+import os
+
 from app.db import SessionLocal
 from app.models import MentorshipPackage
 
 
-def seed():
+def seed() -> None:
+    if os.getenv("SEED_DEMO_DATA", "false").strip().lower() not in {"1", "true", "yes"}:
+        print("Seed skipped: set SEED_DEMO_DATA=true explicitly for development data.")
+        return
+
     db = SessionLocal()
     try:
-        if db.query(MentorshipPackage).count() > 0:
-            print("Packages already exist. Skipping.")
+        exists = db.query(MentorshipPackage).filter(
+            MentorshipPackage.name == "پکیج یک‌ماهه منتورینگ"
+        ).first()
+        if exists:
+            print("Development mentorship package already exists; no changes made.")
             return
         db.add(MentorshipPackage(
             name="پکیج یک‌ماهه منتورینگ",
@@ -17,7 +30,10 @@ def seed():
             is_active=True,
         ))
         db.commit()
-        print("Seeded mentorship package.")
+        print("Development mentorship package inserted.")
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
