@@ -179,6 +179,7 @@ services:
       SERVICE_NAME: people-service
       SERVICE_PORT: 8000
       DB_URL: postgresql+psycopg2://${PEOPLE_DB_USER:-chekad_people_app}:${PEOPLE_DB_PASSWORD}@postgres:5432/${PEOPLE_DB_NAME:-chekad_people}
+      AUTH_INTERNAL_URL: http://auth-service:8000
     depends_on:
       migrate-people:
         condition: service_completed_successfully
@@ -200,6 +201,7 @@ services:
       SERVICE_NAME: content-service
       SERVICE_PORT: 8000
       DB_URL: postgresql+psycopg2://${CONTENT_DB_USER:-chekad_content_app}:${CONTENT_DB_PASSWORD}@postgres:5432/${CONTENT_DB_NAME:-chekad_content}
+      AUTH_INTERNAL_URL: http://auth-service:8000
     depends_on:
       migrate-content:
         condition: service_completed_successfully
