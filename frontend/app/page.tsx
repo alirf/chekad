@@ -262,13 +262,31 @@ export default function Home() {
                 <div><strong>انتخاب نهایی با دانش‌آموز است</strong><p>پس از بررسی نیاز، گزینه‌های متناسب معرفی می‌شوند و فرصت انتخاب وجود دارد.</p></div>
               </div>
             </div>
-            <div className="home-process-steps">
-              {processSteps.map((step, index) => (
-                <article className="home-process-step" key={step.number}>
-                  <div className="home-process-step-index"><span>{step.number}</span>{index < processSteps.length - 1 ? <i /> : null}</div>
-                  <div><h3>{step.title}</h3><p>{step.text}</p></div>
-                </article>
-              ))}
+            <div className="home-process-steps" aria-label="مراحل شروع همکاری">
+              <div className="home-process-steps-heading">
+                <div>
+                  <span>مسیر همکاری</span>
+                  <strong>از درخواست تا شروع همراهی</strong>
+                </div>
+                <span className="home-process-count">۴ مرحله ساده</span>
+              </div>
+              <div className="home-process-timeline">
+                {processSteps.map((step, index) => (
+                  <article className="home-process-step" key={step.number}>
+                    <div className="home-process-step-index">
+                      <span>{step.number}</span>
+                      {index < processSteps.length - 1 ? <i /> : null}
+                    </div>
+                    <div className="home-process-step-content">
+                      <div className="home-process-step-heading">
+                        <h3>{step.title}</h3>
+                        <span>مرحله {step.number}</span>
+                      </div>
+                      <p>{step.text}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         </section>
