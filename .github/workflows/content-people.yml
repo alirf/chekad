@@ -26,6 +26,9 @@ jobs:
         working-directory: services/${{ matrix.service }}
     env:
       PYTHONPATH: ${{ github.workspace }}/services/${{ matrix.service }}
+      DB_URL: sqlite:///./${{ matrix.service }}-migration.db
+      MIGRATION_DB_URL: sqlite:///./${{ matrix.service }}-migration.db
+      SERVICE_NAME: ${{ matrix.service }}-service
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -34,4 +37,6 @@ jobs:
           cache: pip
           cache-dependency-path: services/${{ matrix.service }}/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - name: Verify database migrations
+        run: alembic upgrade head
       - run: pytest -q
