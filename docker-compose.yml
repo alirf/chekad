@@ -197,6 +197,8 @@ services:
     # Image is built by the matching migrate-* service.
     container_name: chekad-content
     restart: unless-stopped
+    volumes:
+      - chekad_media:/data/media
     environment:
       SERVICE_NAME: content-service
       SERVICE_PORT: 8000
@@ -260,3 +262,4 @@ networks:
 
 volumes:
   postgres_data:
+  chekad_media:
