@@ -24,6 +24,8 @@ jobs:
     defaults:
       run:
         working-directory: services/${{ matrix.service }}
+    env:
+      PYTHONPATH: ${{ github.workspace }}/services/${{ matrix.service }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
