@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     jwt_audience: str = "chekad-admin"
 
     app_env: str = "development"
-    # Keep false only for local HTTP development. Set true behind HTTPS in production.
     auth_cookie_secure: bool = False
+    student_registration_enabled: bool = False
 
     @model_validator(mode="after")
     def enforce_secure_cookie_in_production(self):
