@@ -606,18 +606,39 @@ def select_application_offer(
     profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
     if profile is None:
         raise HTTPException(404, "پروفایل دانش‌آموز پیدا نشد.")
-    offer = db.query(models.ApplicationOffer).filter_by(id=offer_id).with_for_update().first()
-    if offer is None or offer.status != "proposed":
+    # Always lock the parent application before any offer row. Two different
+    # offers for the same application must serialize on this row; locking each
+    # offer first can deadlock when both transactions later withdraw the sibling.
+    offer_reference = db.query(models.ApplicationOffer).filter_by(id=offer_id).first()
+    if offer_reference is None:
         raise HTTPException(404, "این پیشنهاد دیگر در دسترس نیست.")
-    application_model = _model_for(offer.application_kind)
+
+    application_kind = offer_reference.application_kind
+    application_id = offer_reference.application_id
+    application_model = _model_for(application_kind)
     application = (
         db.query(application_model)
-        .filter_by(id=offer.application_id, student_id=profile.id)
+        .filter_by(id=application_id, student_id=profile.id)
         .with_for_update()
         .first()
     )
     if application is None:
         raise HTTPException(404, "درخواست متعلق به حساب شما نیست.")
+    if application.status != "options_proposed":
+        raise HTTPException(409, "این درخواست در وضعیت انتخاب پیشنهاد قرار ندارد.")
+
+    offer = (
+        db.query(models.ApplicationOffer)
+        .filter_by(
+            id=offer_id,
+            application_kind=application_kind,
+            application_id=application_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if offer is None or offer.status != "proposed":
+        raise HTTPException(404, "این پیشنهاد دیگر در دسترس نیست.")
     if application.status != "options_proposed":
         raise HTTPException(409, "این درخواست در وضعیت انتخاب پیشنهاد قرار ندارد.")
     if offer.expires_at is not None and offer.expires_at <= utcnow():
