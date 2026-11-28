@@ -35,10 +35,13 @@ export default function StudentRequestOffersPage() {
   useEffect(() => {
     if (sessionStatus === "checking") return;
     let active = true;
-    load().catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "دریافت پیشنهادها انجام نشد."); })
+    fetch("/api/application/student/application-offers", { credentials: "same-origin", cache: "no-store" })
+      .then((response) => readJson<{ items: Offer[] }>(response))
+      .then((data) => { if (active) setOffers(data.items); })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "دریافت پیشنهادها انجام نشد."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [load, sessionStatus]);
+  }, [sessionStatus]);
 
   async function selectOffer(offer: Offer) {
     const confirmed = window.confirm("آیا مطمئنی که می‌خواهی «" + offer.person_name + "» را برای این درخواست انتخاب کنی؟ پس از تأیید، سایر گزینه‌ها بسته می‌شوند.");

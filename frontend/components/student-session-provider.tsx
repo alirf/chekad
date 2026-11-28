@@ -131,7 +131,7 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
   }, [session.status]);
 
   useEffect(() => {
-    void refreshSession();
+    const initialRefresh = window.setTimeout(() => void refreshSession(), 0);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -184,6 +184,7 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
     window.addEventListener(STUDENT_SESSION_INVALID_EVENT, handleInvalidSession);
 
     return () => {
+      window.clearTimeout(initialRefresh);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener(STUDENT_SESSION_INVALID_EVENT, handleInvalidSession);
       if (handleStorage) {

@@ -10,7 +10,7 @@ export function StudentNotificationIndicator() {
     catch { /* Notifications may be temporarily unavailable. */ }
   }, []);
   useEffect(() => {
-    void refresh();
+    const initialRefresh = window.setTimeout(() => void refresh(), 0);
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, 30000);
@@ -18,6 +18,7 @@ export function StudentNotificationIndicator() {
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
+      window.clearTimeout(initialRefresh);
       window.clearInterval(interval);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);

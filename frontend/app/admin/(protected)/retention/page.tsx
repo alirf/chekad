@@ -38,18 +38,20 @@ export default function AdminRetentionPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError("");
-    fetch("/api/application/admin/retention?days=" + days, { credentials: "same-origin", cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "دریافت گزارش Retention انجام نشد.");
-        return data as RetentionReport;
-      })
-      .then((data) => { if (active) setReport(data); })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "خطای ارتباط با سرور"); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    const request = window.setTimeout(() => {
+      setLoading(true);
+      setError("");
+      fetch("/api/application/admin/retention?days=" + days, { credentials: "same-origin", cache: "no-store" })
+        .then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "دریافت گزارش Retention انجام نشد.");
+          return data as RetentionReport;
+        })
+        .then((data) => { if (active) setReport(data); })
+        .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "خطای ارتباط با سرور"); })
+        .finally(() => { if (active) setLoading(false); });
+    }, 0);
+    return () => { active = false; window.clearTimeout(request); };
   }, [days]);
 
   const metrics: Array<[string, number | undefined]> = [
