@@ -70,8 +70,6 @@ export default function StudentWeeklyPlanPage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError("");
     fetchStudentWeeklyPlan(start, end)
       .then((result) => {
         if (active) setTasks(result.items);
@@ -105,6 +103,24 @@ export default function StudentWeeklyPlanPage() {
   const completed = tasks.filter((task) => task.status === "completed").length;
   const totalMinutes = tasks.reduce((sum, task) => sum + task.duration_minutes, 0);
   const currentWeek = dateKey(saturdayStart(new Date())) === dateKey(weekStart);
+
+  function navigateWeek(offset: number) {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setWeekStart((old) => {
+      const next = new Date(old);
+      next.setDate(next.getDate() + offset);
+      return next;
+    });
+  }
+
+  function navigateToCurrentWeek() {
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setWeekStart(saturdayStart(new Date()));
+  }
 
   async function markCompleted(task: AssignedWeeklyTask) {
     if (task.status === "completed" || busyId !== null) return;
@@ -170,17 +186,9 @@ export default function StudentWeeklyPlanPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" className="student-portal-button secondary" onClick={() => setWeekStart((old) => {
-              const next = new Date(old);
-              next.setDate(next.getDate() - 7);
-              return next;
-            })}>هفته قبل</button>
-            <button type="button" className="student-portal-button secondary" disabled={currentWeek} onClick={() => setWeekStart(saturdayStart(new Date()))}>این هفته</button>
-            <button type="button" className="student-portal-button secondary" onClick={() => setWeekStart((old) => {
-              const next = new Date(old);
-              next.setDate(next.getDate() + 7);
-              return next;
-            })}>هفته بعد</button>
+            <button type="button" className="student-portal-button secondary" onClick={() => navigateWeek(-7)}>هفته قبل</button>
+            <button type="button" className="student-portal-button secondary" disabled={currentWeek} onClick={navigateToCurrentWeek}>این هفته</button>
+            <button type="button" className="student-portal-button secondary" onClick={() => navigateWeek(7)}>هفته بعد</button>
           </div>
         </div>
       </section>
