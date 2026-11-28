@@ -2,21 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import {
   fetchStudentApplications,
   fetchStudentClasses,
   fetchStudentMessageThreads,
-  fetchStudentProfile,
   fetchStudentReports,
   fetchStudentSchedule,
   fetchStudentWeeklyPlan,
-  StudentAuthError,
   type StudentApplication,
-  type StudentProfile,
   type StudentScheduleEvent,
 } from "../../lib/student-auth";
 import { formatPortalDateTime, PortalEmptyState, PortalPageHeading, PortalStatus } from "../../components/student-portal-ui";
+import { useStudentSession } from "../../components/student-session-provider";
 
 const fieldNames = { physics: "المپیاد فیزیک", computer: "المپیاد کامپیوتر" };
 const applicationStatus: Record<string, string> = {
@@ -36,8 +33,7 @@ function SummaryCard({ label, value, detail, icon, href }: { label: string; valu
 }
 
 export default function StudentDashboardPage() {
-  const router = useRouter();
-  const [student, setStudent] = useState<StudentProfile | null>(null);
+  const { status: sessionStatus, student } = useStudentSession();
   const [applications, setApplications] = useState<StudentApplication[]>([]);
   const [events, setEvents] = useState<StudentScheduleEvent[]>([]);
   const [unread, setUnread] = useState(0);
@@ -49,47 +45,46 @@ export default function StudentDashboardPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+
     let active = true;
     async function load() {
-      try {
-        const profile = await fetchStudentProfile();
-        if (!active) return;
-        setStudent(profile);
-        const results = await Promise.allSettled([
-          fetchStudentApplications(),
-          fetchStudentSchedule(),
-          fetchStudentMessageThreads(),
-          fetchStudentClasses(),
-          fetchStudentReports(),
-          fetchStudentWeeklyPlan(),
-        ]);
-        if (!active) return;
-        const [requestResult, eventResult, threadResult, classResult, reportResult, taskResult] = results;
-        if (requestResult.status === "fulfilled") setApplications(requestResult.value.items);
-        if (eventResult.status === "fulfilled") {
-          setEvents(eventResult.value.items);
-          setScheduleReferenceTime(Date.parse(eventResult.value.fetched_at));
-        }
-        if (threadResult.status === "fulfilled") setUnread(threadResult.value.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
-        if (classResult.status === "fulfilled") setClassCount(classResult.value.items.length);
-        if (reportResult.status === "fulfilled") setReportCount(reportResult.value.total);
-        if (taskResult.status === "fulfilled") setTaskCount(taskResult.value.items.filter((item) => item.status === "pending").length);
-        const failures = results.filter((item) => item.status === "rejected");
-        if (failures.length) setError("بعضی از بخش‌ها موقتاً بارگذاری نشدند. می‌توانی هر بخش را جداگانه باز کنی.");
-      } catch (cause) {
-        if (!active) return;
-        if (cause instanceof StudentAuthError && cause.status === 401) {
-          router.replace("/login");
-          return;
-        }
-        setError(cause instanceof Error ? cause.message : "دریافت اطلاعات حساب انجام نشد.");
-      } finally {
-        if (active) setLoading(false);
+      const results = await Promise.allSettled([
+        fetchStudentApplications(),
+        fetchStudentSchedule(),
+        fetchStudentMessageThreads(),
+        fetchStudentClasses(),
+        fetchStudentReports(),
+        fetchStudentWeeklyPlan(),
+      ]);
+      if (!active) return;
+
+      const [requestResult, eventResult, threadResult, classResult, reportResult, taskResult] = results;
+      if (requestResult.status === "fulfilled") setApplications(requestResult.value.items);
+      if (eventResult.status === "fulfilled") {
+        setEvents(eventResult.value.items);
+        setScheduleReferenceTime(Date.parse(eventResult.value.fetched_at));
       }
+      if (threadResult.status === "fulfilled") {
+        setUnread(threadResult.value.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
+      }
+      if (classResult.status === "fulfilled") setClassCount(classResult.value.items.length);
+      if (reportResult.status === "fulfilled") setReportCount(reportResult.value.total);
+      if (taskResult.status === "fulfilled") {
+        setTaskCount(taskResult.value.items.filter((item) => item.status === "pending").length);
+      }
+      const failures = results.filter((item) => item.status === "rejected");
+      if (failures.length) {
+        setError("بعضی از بخش‌ها موقتاً بارگذاری نشدند. می‌توانی هر بخش را جداگانه باز کنی.");
+      }
+      setLoading(false);
     }
+
     void load();
-    return () => { active = false; };
-  }, [router]);
+    return () => {
+      active = false;
+    };
+  }, [sessionStatus]);
 
   const upcoming = useMemo(() => {
     if (scheduleReferenceTime === null) return [];
@@ -99,7 +94,7 @@ export default function StudentDashboardPage() {
       .slice(0, 3);
   }, [events, scheduleReferenceTime]);
 
-  if (loading) return <div className="student-portal-loading">در حال بارگذاری صفحه شخصی...</div>;
+  if (loading || sessionStatus === "checking") return <div className="student-portal-loading">در حال بارگذاری صفحه شخصی...</div>;
   if (!student) return <div className="student-portal-error" role="alert">{error || "اطلاعات حساب در دسترس نیست."}</div>;
 
   return (

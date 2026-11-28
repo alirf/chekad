@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { ApiError, submitPublicApplication } from "../lib/api";
-import { fetchStudentProfile, StudentAuthError, type StudentProfile, type OlympiadField } from "../lib/student-auth";
+import { useStudentSession } from "./student-session-provider";
 
 type RequestKind = "mentorship" | "tutoring";
 
 export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boolean }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const [student, setStudent] = useState<StudentProfile | null>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [profileError, setProfileError] = useState("");
+  const { status: sessionStatus, student, refreshSession } = useStudentSession();
   const [step, setStep] = useState<1 | 2>(1);
   const [level, setLevel] = useState("");
   const [goal, setGoal] = useState("");
@@ -25,27 +23,7 @@ export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boo
 
   const isMentorship = kind === "mentorship";
 
-  useEffect(() => {
-    let active = true;
-    fetchStudentProfile()
-      .then((profile) => {
-        if (active) setStudent(profile);
-      })
-      .catch((cause) => {
-        if (!active) return;
-        setProfileError(
-          cause instanceof StudentAuthError && cause.status === 401
-            ? "برای ثبت درخواست باید وارد حساب دانش‌آموزی خود شوی."
-            : cause instanceof Error
-              ? cause.message
-              : "دریافت اطلاعات حساب انجام نشد.",
-        );
-      })
-      .finally(() => {
-        if (active) setProfileLoading(false);
-      });
-    return () => { active = false; };
-  }, []);
+
 
   function goToNextStep() {
     if (formRef.current?.reportValidity()) {
@@ -72,7 +50,7 @@ export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boo
         first_name: student.first_name,
         last_name: student.last_name,
         grade: student.grade,
-        field: student.field as OlympiadField,
+        field: student.field,
         guardian_phone: student.guardian_phone,
         guardian_consent: true,
         privacy_accepted: true,
@@ -106,17 +84,29 @@ export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boo
     );
   }
 
-  if (profileLoading) {
+  if (sessionStatus === "checking") {
     return <section className="request-form request-disabled" aria-live="polite"><p>در حال بررسی حساب دانش‌آموزی...</p></section>;
   }
 
-  if (!student) {
+  if (sessionStatus === "unavailable") {
+    return (
+      <section className="request-form request-disabled" aria-live="polite">
+        <h2>بررسی حساب در حال حاضر ممکن نیست.</h2>
+        <p>اتصال را بررسی کن و دوباره وضعیت حساب را بررسی کن.</p>
+        <button className="button button-secondary" type="button" onClick={() => void refreshSession()}>
+          بررسی دوباره حساب
+        </button>
+      </section>
+    );
+  }
+
+  if (sessionStatus !== "authenticated" || !student) {
     return (
       <section className="request-form request-disabled request-login-required" aria-live="polite">
         <span className="eyebrow">STUDENT ACCOUNT REQUIRED</span>
         <span className="disabled-icon" aria-hidden="true">◎</span>
         <h2>درخواستت را از داخل حساب دانش‌آموزی ثبت کن.</h2>
-        <p>{profileError || "ابتدا وارد حساب شو تا درخواست منتورینگ یا کلاس خصوصی به پرونده خودت متصل شود و بعداً بتوانی وضعیت آن را در پنل پیگیری کنی."}</p>
+        <p>{"ابتدا وارد حساب شو تا درخواست منتورینگ یا کلاس خصوصی به پرونده خودت متصل شود و بعداً بتوانی وضعیت آن را در پنل پیگیری کنی."}</p>
         <div className="request-auth-actions">
           <Link className="button button-primary" href="/login">ورود به حساب</Link>
           <Link className="button button-secondary" href="/register">ساخت حساب دانش‌آموزی</Link>

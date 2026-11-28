@@ -2,50 +2,22 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { fetchStudentProfile, logoutStudent, StudentAuthError, type StudentProfile } from "../lib/student-auth";
-
-type SessionState =
-  | { status: "checking" }
-  | { status: "guest" }
-  | { status: "authenticated"; student: StudentProfile }
-  | { status: "unavailable" };
+import { useState } from "react";
+import { useStudentSession } from "./student-session-provider";
 
 export function SiteHeader() {
-  const [session, setSession] = useState<SessionState>({ status: "checking" });
+  const {
+    status,
+    student,
+    refreshSession,
+    logout,
+  } = useStudentSession();
   const [loggingOut, setLoggingOut] = useState(false);
   const [feedback, setFeedback] = useState("");
 
-  useEffect(() => {
-    let active = true;
-    fetchStudentProfile()
-      .then((student) => {
-        if (active) setSession({ status: "authenticated", student });
-      })
-      .catch((cause) => {
-        if (!active) return;
-        if (cause instanceof StudentAuthError && cause.status === 401) {
-          setSession({ status: "guest" });
-        } else {
-          setSession({ status: "unavailable" });
-        }
-      });
-    return () => { active = false; };
-  }, []);
-
-  async function refreshSession() {
-    setSession({ status: "checking" });
+  async function handleRefreshSession() {
     setFeedback("");
-    try {
-      const student = await fetchStudentProfile();
-      setSession({ status: "authenticated", student });
-    } catch (cause) {
-      if (cause instanceof StudentAuthError && cause.status === 401) {
-        setSession({ status: "guest" });
-      } else {
-        setSession({ status: "unavailable" });
-      }
-    }
+    await refreshSession();
   }
 
   async function handleLogout() {
@@ -53,8 +25,7 @@ export function SiteHeader() {
     setLoggingOut(true);
     setFeedback("");
     try {
-      await logoutStudent();
-      setSession({ status: "guest" });
+      await logout();
     } catch {
       setFeedback("خروج از حساب انجام نشد. اتصال را بررسی و دوباره تلاش کن.");
     } finally {
@@ -62,16 +33,16 @@ export function SiteHeader() {
     }
   }
 
-  const studentName = session.status === "authenticated"
-    ? (session.student.first_name + " " + session.student.last_name).trim()
+  const studentName = student
+    ? (student.first_name + " " + student.last_name).trim()
     : "دانش‌آموز چکاد";
-  const avatarLetter = session.status === "authenticated"
-    ? session.student.first_name.trim().slice(0, 1) || "د"
+  const avatarLetter = student
+    ? student.first_name.trim().slice(0, 1) || "د"
     : "د";
 
-  const desktopAccount = session.status === "checking" ? (
+  const desktopAccount = status === "checking" ? (
     <span className="header-auth-placeholder" aria-live="polite">در حال بررسی حساب...</span>
-  ) : session.status === "authenticated" ? (
+  ) : status === "authenticated" ? (
     <details className="header-account-menu">
       <summary className="header-account-trigger" aria-label="باز کردن منوی حساب دانش‌آموزی">
         <span className="header-account-avatar">{avatarLetter}</span>
@@ -94,17 +65,17 @@ export function SiteHeader() {
         </button>
       </div>
     </details>
-  ) : session.status === "unavailable" ? (
-    <button type="button" className="header-auth-placeholder header-auth-retry" onClick={refreshSession}>
+  ) : status === "unavailable" ? (
+    <button type="button" className="header-auth-placeholder header-auth-retry" onClick={handleRefreshSession}>
       بررسی دوباره حساب
     </button>
   ) : (
     <Link className="header-auth-placeholder" href="/login">ورود / ثبت‌نام</Link>
   );
 
-  const mobileAccount = session.status === "checking" ? (
+  const mobileAccount = status === "checking" ? (
     <div className="mobile-account-status" role="status">در حال بررسی حساب دانش‌آموزی...</div>
-  ) : session.status === "authenticated" ? (
+  ) : status === "authenticated" ? (
     <div className="mobile-account-panel">
       <div className="mobile-account-identity">
         <span className="header-account-avatar">{avatarLetter}</span>
@@ -117,8 +88,8 @@ export function SiteHeader() {
         {loggingOut ? "در حال خروج..." : "خروج از حساب"}
       </button>
     </div>
-  ) : session.status === "unavailable" ? (
-    <button type="button" className="mobile-auth-placeholder mobile-auth-retry" onClick={refreshSession}>
+  ) : status === "unavailable" ? (
+    <button type="button" className="mobile-auth-placeholder mobile-auth-retry" onClick={handleRefreshSession}>
       بررسی دوباره وضعیت حساب
     </button>
   ) : (

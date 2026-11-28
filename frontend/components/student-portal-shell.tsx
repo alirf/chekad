@@ -3,12 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import {
-  fetchStudentMessageThreads,
-  fetchStudentProfile,
-  logoutStudent,
-  StudentAuthError,
-} from "../lib/student-auth";
+import { fetchStudentMessageThreads, StudentAuthError } from "../lib/student-auth";
+import { useStudentSession } from "./student-session-provider";
 
 const navigation = [
   { href: "/dashboard", title: "صفحه شخصی", icon: "home" },
@@ -54,52 +50,79 @@ function PortalIcon({ name }: { name: string }) {
 export function StudentPortalShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [studentName, setStudentName] = useState("");
+  const { status, student, logout, refreshSession } = useStudentSession();
   const [unread, setUnread] = useState(0);
-  const [checking, setChecking] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const studentName = student
+    ? student.first_name + " " + student.last_name
+    : "";
   const page = useMemo(() => pageTitles[pathname] || pageTitles["/dashboard"], [pathname]);
 
   useEffect(() => {
+    if (status === "guest") {
+      router.replace("/login");
+      return;
+    }
+    if (status !== "authenticated") return;
+
     let active = true;
-    fetchStudentProfile()
-      .then((profile) => {
-        if (!active) return;
-        setStudentName(profile.first_name + " " + profile.last_name);
-        return fetchStudentMessageThreads()
-          .then((result) => {
-            if (active) setUnread(result.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
-          })
-          .catch(() => undefined);
-      })
-      .catch((error) => {
-        if (error instanceof StudentAuthError && error.status === 401) {
-          router.replace("/login");
-          return;
+    fetchStudentMessageThreads()
+      .then((result) => {
+        if (active) {
+          setUnread(result.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
         }
       })
-      .finally(() => {
-        if (active) setChecking(false);
+      .catch((cause) => {
+        if (active && cause instanceof StudentAuthError && cause.status === 401) {
+          void refreshSession();
+        }
       });
-    return () => { active = false; };
-  }, [router]);
+
+    return () => {
+      active = false;
+    };
+  }, [status, router, refreshSession]);
 
   async function handleLogout() {
+    if (loggingOut) return;
     setLoggingOut(true);
+    setLogoutError("");
     try {
-      await logoutStudent();
-    } finally {
+      await logout();
       router.replace("/login");
       router.refresh();
+    } catch {
+      setLogoutError("خروج از حساب انجام نشد. اتصال را بررسی و دوباره تلاش کن.");
+    } finally {
       setLoggingOut(false);
     }
   }
 
-  if (checking) {
+  if (status === "checking") {
     return (
       <div className="student-portal-checking" role="status">
         <span className="student-portal-spinner" />
         <p>در حال بررسی نشست دانش‌آموزی...</p>
+      </div>
+    );
+  }
+
+  if (status === "unavailable") {
+    return (
+      <div className="student-portal-checking" role="status">
+        <p>بررسی حساب در حال حاضر ممکن نیست. اتصال را بررسی و دوباره تلاش کن.</p>
+        <button type="button" className="student-portal-topbar-logout" onClick={() => void refreshSession()}>
+          بررسی دوباره
+        </button>
+      </div>
+    );
+  }
+
+  if (status === "guest" || !student) {
+    return (
+      <div className="student-portal-checking" role="status">
+        <p>در حال انتقال به صفحهٔ ورود...</p>
       </div>
     );
   }
@@ -148,6 +171,7 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
             <p>{page.subtitle}</p>
           </div>
           <div className="student-portal-topbar-actions">
+            {logoutError && <span role="alert" className="student-portal-inline-notice">{logoutError}</span>}
             <Link href="/dashboard/messages" className="student-portal-notification" aria-label="پیام‌ها">
               <PortalIcon name="message" />
               {unread > 0 && <i />}

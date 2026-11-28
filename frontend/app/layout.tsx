@@ -3,6 +3,7 @@ import { Vazirmatn } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "../components/site-header";
 import { SiteFooter } from "../components/site-footer";
+import { StudentSessionProvider } from "../components/student-session-provider";
 
 const vazirmatn = Vazirmatn({ subsets: ["arabic", "latin"], display: "swap" });
 
@@ -33,10 +34,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fa" dir="rtl" className={vazirmatn.className}>
       <body>
-        <a className="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
-        <SiteHeader />
-        {children}
-        <SiteFooter />
+        <StudentSessionProvider>
+          <a className="skip-link" href="#main-content">رفتن به محتوای اصلی</a>
+          <SiteHeader />
+          {children}
+          <SiteFooter />
+        </StudentSessionProvider>
       </body>
     </html>
   );

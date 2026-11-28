@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { fetchStudentProfile, loginStudent, StudentAuthError } from "../../lib/student-auth";
+import { useStudentSession } from "../../components/student-session-provider";
 
 export default function StudentLoginPage() {
+  const { setAuthenticated } = useStudentSession();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,6 +22,7 @@ export default function StudentLoginPage() {
       if (session.id !== result.student.id) {
         throw new StudentAuthError("ورود انجام شد، اما نشست مرورگر تأیید نشد. نشانی سایت و تنظیم کوکی محلی را بررسی کنید.");
       }
+      setAuthenticated(session);
       window.location.replace("/dashboard");
     } catch (cause) {
       setError(cause instanceof StudentAuthError ? cause.message : "ورود انجام نشد. دوباره تلاش کنید.");

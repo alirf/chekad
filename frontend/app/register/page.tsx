@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { fetchStudentProfile, registerStudent, StudentAuthError, StudentGrade, OlympiadField } from "../../lib/student-auth";
+import { useStudentSession } from "../../components/student-session-provider";
 
 export default function StudentRegisterPage() {
+  const { setAuthenticated } = useStudentSession();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -51,6 +53,7 @@ export default function StudentRegisterPage() {
       if (session.id !== result.student.id) {
         throw new StudentAuthError("حساب ساخته شد، اما نشست مرورگر تأیید نشد. نشانی سایت و تنظیم کوکی محلی را بررسی کنید.");
       }
+      setAuthenticated(session);
       window.location.replace("/dashboard");
     } catch (cause) {
       setError(cause instanceof StudentAuthError ? cause.message : "ثبت‌نام انجام نشد. دوباره تلاش کنید.");
