@@ -42,7 +42,7 @@
 .tutoring-hero-baseline{position:absolute;bottom:0;left:0;width:100%;border-top:1px solid #ffffff20}
 .tutoring-hero-baseline .container{min-height:46px;display:flex;align-items:center;gap:17px;color:#879ab1;font:9px monospace;letter-spacing:1.3px;direction:ltr}
 .tutoring-hero-baseline i{width:4px;height:4px;border-radius:50%;background:var(--tut-teal)}
-.tutoring-hero-baseline b{margin-left:auto;color:#b5c3d4;font:700 10px inherit;letter-spacing:0;direction:rtl}
+.tutoring-hero-baseline b{margin-left:auto;color:#b5c3d4;font-size:10px;font-weight:700;line-height:1.9;letter-spacing:0;direction:rtl}
 .tutoring-benefits-section{padding:82px 0 85px;background:#fff}
 .tutoring-section-heading{max-width:680px;margin-bottom:35px}
 .tutoring-section-kicker{display:inline-block;color:#3b70b9;font-size:9px;font-weight:950;letter-spacing:1.6px}
