@@ -25,9 +25,9 @@ export function SiteHeader() {
             <Link href="/about">درباره ما</Link>
           </nav>
 
-          <span className="header-auth-placeholder" aria-disabled="true" title="به‌زودی">
+          <Link className="header-auth-placeholder" href="/login">
             ورود / ثبت‌نام
-          </span>
+          </Link>
 
           <details className="mobile-nav">
             <summary aria-label="باز کردن منوی سایت">
@@ -39,7 +39,7 @@ export function SiteHeader() {
               <Link href="/exams">آزمون</Link>
               <Link href="/blog">مقالات</Link>
               <Link href="/about">درباره ما</Link>
-              <span className="mobile-auth-placeholder" aria-disabled="true">ورود / ثبت‌نام (به‌زودی)</span>
+              <Link className="mobile-auth-placeholder" href="/login">ورود / ثبت‌نام</Link>
             </nav>
           </details>
         </div>
