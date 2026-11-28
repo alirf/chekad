@@ -38,6 +38,7 @@ export default function StudentDashboardPage() {
   const [events, setEvents] = useState<StudentScheduleEvent[]>([]);
   const [unread, setUnread] = useState(0);
   const [classCount, setClassCount] = useState(0);
+  const [classes, setClasses] = useState<import("../../lib/student-auth").StudentClassRecord[]>([]);
   const [reportCount, setReportCount] = useState(0);
   const [taskCount, setTaskCount] = useState(0);
   const [scheduleReferenceTime, setScheduleReferenceTime] = useState<number | null>(null);
@@ -68,7 +69,10 @@ export default function StudentDashboardPage() {
       if (threadResult.status === "fulfilled") {
         setUnread(threadResult.value.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
       }
-      if (classResult.status === "fulfilled") setClassCount(classResult.value.items.length);
+      if (classResult.status === "fulfilled") {
+        setClasses(classResult.value.items);
+        setClassCount(classResult.value.items.length);
+      }
       if (reportResult.status === "fulfilled") setReportCount(reportResult.value.total);
       if (taskResult.status === "fulfilled") {
         setTaskCount(taskResult.value.items.filter((item) => item.status === "pending").length);
@@ -94,6 +98,57 @@ export default function StudentDashboardPage() {
       .slice(0, 3);
   }, [events, scheduleReferenceTime]);
 
+  const latestApplication = applications[0] || null;
+  const activeClass = classes[0] || null;
+  let nextStep: { eyebrow: string; title: string; description: string; label: string; href: string };
+  if (latestApplication && ["waiting_for_student", "options_proposed"].includes(latestApplication.status)) {
+    nextStep = {
+      eyebrow: "ACTION REQUIRED",
+      title: latestApplication.status === "options_proposed" ? "پیشنهادهای آموزشی آماده بررسی است" : "برای ادامه درخواست، پاسخ تو لازم است",
+      description: "گفت‌وگوهای پنل را باز کن و پیام‌های مربوط به درخواستت را بررسی کن.",
+      label: "بررسی پیام‌ها", href: "/dashboard/messages",
+    };
+  } else if (activeClass && taskCount > 0) {
+    nextStep = {
+      eyebrow: "YOUR NEXT STEP", title: "برنامه هفتگی‌ات را ادامه بده",
+      description: taskCount.toLocaleString("fa-IR") + " فعالیت در انتظار انجام داری. پس از انجام هر فعالیت، وضعیت آن را ثبت کن.",
+      label: "مشاهده برنامه", href: "/dashboard/weekly-plan",
+    };
+  } else if (activeClass) {
+    nextStep = {
+      eyebrow: "YOUR LEARNING", title: "همکاری آموزشی تو فعال است",
+      description: activeClass.person_name
+        ? "همراه آموزشی تو " + activeClass.person_name + " است. زمان جلسات و گفت‌وگو را از پنل دنبال کن."
+        : "زمان جلسات و جزئیات همکاری را در پنل مرور کن.",
+      label: "مشاهده کلاس‌ها", href: "/dashboard/classes",
+    };
+  } else if (latestApplication && ["new", "reviewing", "accepted"].includes(latestApplication.status)) {
+    nextStep = {
+      eyebrow: "REQUEST IN PROGRESS",
+      title: latestApplication.status === "new" ? "درخواستت دریافت شده است" : "درخواستت در حال پیگیری است",
+      description: "آخرین وضعیت درخواست و کد پیگیری را بررسی کن. پس از هر تغییر، اعلان آن در پنل ثبت می‌شود.",
+      label: "پیگیری درخواست", href: "/dashboard#my-requests",
+    };
+  } else if (latestApplication && latestApplication.status === "completed") {
+    nextStep = {
+      eyebrow: "KEEP MOVING", title: "یک مرحله از مسیرت کامل شد",
+      description: "بازخورد همکاری را مرور کن یا برای مرحله بعدی مسیر آموزشی درخواست تازه‌ای ثبت کن.",
+      label: "مشاهده گزارش‌ها", href: "/dashboard/reports",
+    };
+  } else if (latestApplication && ["rejected", "cancelled"].includes(latestApplication.status)) {
+    nextStep = {
+      eyebrow: "NEXT OPPORTUNITY", title: "برای ادامه مسیر راهنمایی بگیر",
+      description: "با پشتیبانی چکاد صحبت کن تا گزینه مناسب بعدی را بررسی کنید.",
+      label: "گفت‌وگو با پشتیبانی", href: "/dashboard/messages",
+    };
+  } else {
+    nextStep = {
+      eyebrow: "GET STARTED", title: "اولین قدم مسیر المپیادت را بردار",
+      description: "با ثبت درخواست منتورینگ یا کلاس خصوصی، مسیر آموزشی‌ات را با همراهی مناسب شروع کن.",
+      label: "درخواست منتورینگ", href: "/mentorship/apply",
+    };
+  }
+
   if (loading || sessionStatus === "checking") return <div className="student-portal-loading">در حال بارگذاری صفحه شخصی...</div>;
   if (!student) return <div className="student-portal-error" role="alert">{error || "اطلاعات حساب در دسترس نیست."}</div>;
 
@@ -113,6 +168,13 @@ export default function StudentDashboardPage() {
       </section>
 
       {error && <div className="student-portal-inline-notice" role="status">{error}</div>}
+
+      <section className="student-next-step-card" aria-label="قدم بعدی شما">
+        <div className="student-next-step-copy">
+          <span>{nextStep.eyebrow}</span><h3>{nextStep.title}</h3><p>{nextStep.description}</p>
+        </div>
+        <Link href={nextStep.href}>{nextStep.label} <b>←</b></Link>
+      </section>
 
       <section className="student-overview-stats" aria-label="خلاصه وضعیت">
         <SummaryCard label="پیام خوانده‌نشده" value={unread} detail="مشاهده گفت‌وگوها" icon="✉" href="/dashboard/messages" />
@@ -152,7 +214,7 @@ export default function StudentDashboardPage() {
         </section>
       </div>
 
-      <section className="student-portal-card student-dashboard-requests">
+      <section id="my-requests" className="student-portal-card student-dashboard-requests">
         <PortalPageHeading
           eyebrow="MY REQUESTS"
           title="درخواست‌های من"

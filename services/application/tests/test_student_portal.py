@@ -738,3 +738,62 @@ def test_admin_student_directory_is_searchable_and_excludes_private_contact_fiel
     assert by_id.status_code == 200
     assert by_id.json()["total"] == 1
     assert by_id.json()["items"][0]["display_name"] == "نگار محمدی"
+
+
+
+def test_admin_reply_creates_student_notification_without_exposing_message_body(client):
+    created = client.post("/student/messages/threads", json={"subject": "پرسش آموزشی"}, headers=origin_headers())
+    thread_id = created.json()["id"]
+    reply = client.post(f"/admin/messages/threads/{thread_id}/messages",
+                        json={"body": "پاسخ محرمانه تیم چکاد"}, headers=origin_headers())
+    assert reply.status_code == 201
+    notifications = client.get("/student/notifications")
+    assert notifications.status_code == 200
+    assert notifications.json()["unread_count"] == 1
+    notification = notifications.json()["items"][0]
+    assert notification["category"] == "message"
+    assert notification["href"] == "/dashboard/messages"
+    assert "پاسخ محرمانه" not in notification["body"]
+
+
+def test_student_notifications_are_persistent_readable_and_isolated(client, db_session):
+    from app.models import StudentNotification
+    db_session.add_all([
+        StudentNotification(student_auth_id=CURRENT_STUDENT["id"], category="message", title="پیام جدید",
+                            body="پیام تازه دریافت کردی.", href="/dashboard/messages", dedupe_key="test-own"),
+        StudentNotification(student_auth_id=99, category="message", title="پیام خصوصی دیگر",
+                            body="نباید دیده شود.", href="/dashboard/messages", dedupe_key="test-other"),
+    ])
+    db_session.commit()
+    listed = client.get("/student/notifications")
+    assert listed.status_code == 200 and listed.json()["total"] == 1
+    assert listed.json()["unread_count"] == 1
+    notification_id = listed.json()["items"][0]["id"]
+    marked = client.patch(f"/student/notifications/{notification_id}/read", headers=origin_headers())
+    assert marked.status_code == 200 and marked.json()["read_at"] is not None
+    assert client.get("/student/notifications").json()["unread_count"] == 0
+    CURRENT_STUDENT["id"] = 99
+    assert client.get("/student/notifications").json()["total"] == 1
+    assert client.patch(f"/student/notifications/{notification_id}/read", headers=origin_headers()).status_code == 404
+
+
+def test_student_activity_is_daily_deduplicated_and_retention_admin_only(client, db_session):
+    from app.models import StudentActivity
+    payload = {"event_type": "session_started"}
+    assert client.post("/student/activities", json=payload, headers=origin_headers()).status_code == 200
+    assert client.post("/student/activities", json=payload, headers=origin_headers()).status_code == 200
+    assert db_session.query(StudentActivity).filter_by(
+        student_auth_id=CURRENT_STUDENT["id"], event_type="session_started"
+    ).count() == 1
+    assert client.post("/student/activities", json={"event_type": "dashboard_viewed"}, headers=origin_headers()).status_code == 200
+    response = client.get("/admin/retention?days=30")
+    assert response.status_code == 200
+    assert response.json()["tracked_students"] >= 1
+    assert response.json()["active_students_7d"] >= 1
+    assert response.json()["cohorts"]
+    assert response.json()["retention_basis"].startswith("unique UTC dates")
+    app.dependency_overrides.pop(require_admin, None)
+    try:
+        assert client.get("/admin/retention").status_code == 401
+    finally:
+        app.dependency_overrides[require_admin] = lambda: {"id": 7, "name": "مدیر آزمون"}

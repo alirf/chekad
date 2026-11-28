@@ -320,3 +320,14 @@ class ManagedStudyTaskUpdate(BaseModel):
 
 class StudentAssignedTaskStatus(BaseModel):
     status: Literal["completed"]
+
+
+
+class StudentActivityCreate(BaseModel):
+    event_type: Literal[
+        "session_started", "dashboard_viewed", "messages_viewed",
+        "classes_viewed", "weekly_plan_viewed", "reports_viewed",
+        "calendar_viewed", "invoices_viewed", "notifications_viewed",
+        "application_submitted", "message_sent", "report_submitted",
+        "task_completed",
+    ]

@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 
 import httpx
@@ -28,6 +28,7 @@ from app.schemas import (
     StudentMessageCreate,
     StudentMessageThreadCreate,
     StudentStudyReportCreate,
+    StudentActivityCreate,
     ManagedStudyTaskCreate,
     ManagedStudyTaskUpdate,
     StudentAssignedTaskStatus,
@@ -48,6 +49,27 @@ APPLICATION_STATUSES = {
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _notify_student(db: Session, student_auth_id: int | None, category: str, title: str,
+                    body: str, href: str, dedupe_key: str) -> None:
+    """Add a student notification to the source event's transaction."""
+    if student_auth_id is None:
+        return
+    if db.query(models.StudentNotification.id).filter_by(dedupe_key=dedupe_key).first():
+        return
+    db.add(models.StudentNotification(
+        student_auth_id=student_auth_id, category=category, title=title[:180],
+        body=body[:700], href=href[:240], dedupe_key=dedupe_key[:190],
+    ))
+
+
+def _student_notification_payload(row: models.StudentNotification) -> dict:
+    return {
+        "id": row.id, "category": row.category, "title": row.title,
+        "body": row.body, "href": row.href, "created_at": row.created_at,
+        "read_at": row.read_at,
+    }
 
 
 def require_public_intake() -> None:
@@ -515,6 +537,133 @@ def student_applications(
     return {"items": items, "total": len(items)}
 
 
+@app.get("/student/notifications")
+def student_notifications(
+    limit: int = Query(default=50, ge=1, le=100),
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.StudentNotification).filter_by(student_auth_id=student["id"])
+    total = query.count()
+    unread_count = query.filter(models.StudentNotification.read_at.is_(None)).count()
+    rows = query.order_by(models.StudentNotification.created_at.desc(), models.StudentNotification.id.desc()).limit(limit).all()
+    return {"items": [_student_notification_payload(row) for row in rows], "total": total, "unread_count": unread_count}
+
+
+@app.patch("/student/notifications/{notification_id}/read")
+def mark_student_notification_read(
+    notification_id: int,
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    row = db.query(models.StudentNotification).filter_by(id=notification_id, student_auth_id=student["id"]).first()
+    if row is None:
+        raise HTTPException(404, "اعلان پیدا نشد.")
+    if row.read_at is None:
+        row.read_at = utcnow()
+        db.commit()
+        db.refresh(row)
+    return _student_notification_payload(row)
+
+
+@app.post("/student/notifications/read-all")
+def mark_all_student_notifications_read(
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    rows = db.query(models.StudentNotification).filter(
+        models.StudentNotification.student_auth_id == student["id"],
+        models.StudentNotification.read_at.is_(None),
+    ).all()
+    now = utcnow()
+    for row in rows:
+        row.read_at = now
+    db.commit()
+    return {"updated": len(rows)}
+
+
+@app.post("/student/activities")
+def record_student_activity(
+    payload: StudentActivityCreate,
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    today = utcnow().date()
+    exists = db.query(models.StudentActivity.id).filter_by(
+        student_auth_id=student["id"], event_type=payload.event_type, activity_date=today,
+    ).first()
+    if exists:
+        return {"recorded": True, "deduplicated": True}
+    db.add(models.StudentActivity(student_auth_id=student["id"], event_type=payload.event_type, activity_date=today))
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ثبت رویداد فعالیت انجام نشد.") from exc
+    return {"recorded": True, "deduplicated": False}
+
+
+@app.get("/admin/retention")
+def admin_retention(
+    days: int = Query(default=30, ge=7, le=180),
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Cohort retention, using distinct UTC dates with an authenticated student session."""
+    today = utcnow().date()
+    start_date = today - timedelta(days=days - 1)
+    rows = db.query(models.StudentActivity.student_auth_id, models.StudentActivity.activity_date).filter(
+        models.StudentActivity.event_type == "session_started"
+    ).order_by(models.StudentActivity.activity_date.asc()).all()
+    dates_by_student: dict[int, set] = {}
+    first_seen: dict[int, object] = {}
+    for student_id, activity_date in rows:
+        dates_by_student.setdefault(student_id, set()).add(activity_date)
+        if student_id not in first_seen or activity_date < first_seen[student_id]:
+            first_seen[student_id] = activity_date
+    cohorts: dict[object, list[int]] = {}
+    for student_id, cohort_date in first_seen.items():
+        if cohort_date >= start_date:
+            cohorts.setdefault(cohort_date, []).append(student_id)
+    cohort_items = []
+    for offset in range(days):
+        cohort_date = start_date + timedelta(days=offset)
+        student_ids = cohorts.get(cohort_date, [])
+        size = len(student_ids)
+        def retained(day_offset: int):
+            target = cohort_date + timedelta(days=day_offset)
+            if target > today:
+                return None, None
+            count = sum(target in dates_by_student.get(student_id, set()) for student_id in student_ids)
+            return count, round(count * 100 / size, 1) if size else 0.0
+        d1_count, d1_rate = retained(1)
+        d7_count, d7_rate = retained(7)
+        d30_count, d30_rate = retained(30)
+        cohort_items.append({
+            "cohort_date": cohort_date.isoformat(), "students": size,
+            "d1_retained": d1_count, "d1_rate": d1_rate,
+            "d7_retained": d7_count, "d7_rate": d7_rate,
+            "d30_retained": d30_count, "d30_rate": d30_rate,
+        })
+    active7 = {sid for sid, dates in dates_by_student.items() if any(d >= today - timedelta(days=6) for d in dates)}
+    active30 = {sid for sid, dates in dates_by_student.items() if any(d >= today - timedelta(days=29) for d in dates)}
+    returning7 = sum(sum(d >= today - timedelta(days=6) for d in dates_by_student[sid]) >= 2 for sid in active7)
+    return {
+        "period_days": days, "tracked_students": len(first_seen),
+        "active_students_7d": len(active7), "active_students_30d": len(active30),
+        "returning_students_7d": returning7, "cohorts": cohort_items,
+        "retention_basis": "unique UTC dates with an authenticated student portal session",
+    }
+
+
 @app.get("/admin/stats")
 def stats(db: Session = Depends(get_db), _: dict = Depends(require_admin)):
     return {
@@ -605,11 +754,23 @@ def update_application_status(
     row = db.get(_model_for(kind), application_id)
     if row is None:
         raise HTTPException(404, "درخواست پیدا نشد.")
+    previous_status = row.status
     row.status = payload.status
     if payload.status == "rejected":
         row.reject_reason = payload.reject_reason
     elif payload.reject_reason is not None:
         raise HTTPException(422, "دلیل رد فقط برای وضعیت ردشده قابل ثبت است.")
+    if previous_status != row.status:
+        labels = {"new": "ثبت‌شده", "reviewing": "در حال بررسی", "waiting_for_student": "منتظر پاسخ شما",
+                  "options_proposed": "پیشنهادها آماده انتخاب", "accepted": "پذیرفته‌شده",
+                  "active": "در حال اجرا", "completed": "تکمیل‌شده", "rejected": "ردشده", "cancelled": "لغوشده"}
+        profile = db.get(models.Student, row.student_id)
+        if profile is not None:
+            service = "منتورینگ" if kind == "mentorship" else "کلاس خصوصی"
+            prompt = "برای ادامه مسیر، پیام‌های پنل را بررسی کن." if row.status in {"waiting_for_student", "options_proposed"} else "وضعیت جدید را در بخش درخواست‌های من ببین."
+            _notify_student(db, profile.auth_student_id, "application", "به‌روزرسانی درخواست " + service,
+                            "وضعیت درخواستت به «" + labels.get(row.status, row.status) + "» تغییر کرد. " + prompt,
+                            "/dashboard", f"application:{kind}:{row.id}:{row.status}:{uuid4().hex}")
     try:
         db.commit()
         db.refresh(row)
@@ -916,6 +1077,9 @@ async def admin_send_message(
     thread.last_message_at = utcnow()
     thread.updated_at = utcnow()
     db.add(message)
+    _notify_student(db, thread.student_auth_id, "message", "پیام جدید از پشتیبانی چکاد",
+                    "در گفت‌وگوی «" + thread.subject + "» پیام تازه‌ای دریافت کردی.",
+                    "/dashboard/messages", f"thread:{thread.id}:message:{uuid4().hex}")
     try:
         db.commit()
         db.refresh(message)
@@ -1427,6 +1591,9 @@ async def mentor_send_message(
     thread.last_message_at = utcnow()
     thread.updated_at = utcnow()
     db.add(message)
+    _notify_student(db, thread.student_auth_id, "message", "پیام جدید از منتور",
+                    "در گفت‌وگوی «" + thread.subject + "» پیام تازه‌ای دریافت کردی.",
+                    "/dashboard/messages", f"thread:{thread.id}:message:{uuid4().hex}")
     try:
         db.commit()
         db.refresh(message)
@@ -1515,6 +1682,11 @@ async def create_assignment(
             )
             db.add(session_row)
         application.status = "active"
+        _notify_student(db, application.student.auth_student_id if application.student else None, "assignment",
+                        "همراه آموزشی به تو اختصاص داده شد",
+                        ("منتور اختصاصی «" if payload.kind == "mentorship" else "مدرس کلاس خصوصی «")
+                        + (assignment.person_name or "همراه آموزشی") + "» برای شروع همکاری ثبت شد. زمان جلسات را از پنل ببین.",
+                        "/dashboard/classes", f"assignment:{payload.kind}:{assignment.id}:created")
         db.commit()
         db.refresh(assignment)
     except HTTPException:
@@ -1613,6 +1785,7 @@ def update_assignment_status(
     if assignment is None:
         raise HTTPException(404, "تخصیص پیدا نشد.")
     application = db.get(application_model, assignment.application_id)
+    previous_status = assignment.status
     assignment.status = payload.status
     if application is not None and payload.status == "completed":
         application.status = "completed"
@@ -1628,6 +1801,13 @@ def update_assignment_status(
         if advisor_thread is not None:
             advisor_thread.status = "open" if payload.status == "active" else "closed"
             advisor_thread.updated_at = utcnow()
+    if application is not None and previous_status != assignment.status:
+        student_id = application.student.auth_student_id if application.student else None
+        labels = {"active": "فعال", "completed": "تکمیل‌شده", "cancelled": "لغوشده"}
+        _notify_student(db, student_id, "assignment", "وضعیت همکاری آموزشی تغییر کرد",
+                        "وضعیت همکاری " + ("منتورینگ" if kind == "mentorship" else "کلاس خصوصی")
+                        + " با «" + (assignment.person_name or "همراه آموزشی") + "» به «" + labels.get(assignment.status, assignment.status) + "» تغییر کرد.",
+                        "/dashboard/classes", f"assignment:{kind}:{assignment.id}:{assignment.status}:{uuid4().hex}")
     db.commit()
     return {"id": assignment.id, "kind": kind, "status": assignment.status}
 
@@ -1773,6 +1953,11 @@ def create_mentor_weekly_report(
         content=payload.content,
     )
     db.add(report)
+    application = db.get(models.MentorshipApplication, assignment.application_id)
+    _notify_student(db, application.student.auth_student_id if application is not None and application.student else None,
+                    "mentor_report", "بازخورد هفتگی منتورت آماده است",
+                    "گزارش هفته " + str(payload.week_number) + " در بخش گزارش‌ها ثبت شد.",
+                    "/dashboard/reports", f"mentor-report:{assignment.id}:{payload.week_number}")
     try:
         db.commit()
         db.refresh(report)
@@ -1966,6 +2151,9 @@ def create_invoice(
     try:
         db.flush()
         invoice.invoice_number = f"CH-INV-{invoice.id:06d}"
+        _notify_student(db, invoice.student_auth_id, "invoice", "فاکتور جدید در حساب تو ثبت شد",
+                        "فاکتور «" + invoice.title + "» در بخش فاکتورها قابل مشاهده است.",
+                        "/dashboard/invoices", f"invoice:{invoice.id}:issued")
         db.commit()
         db.refresh(invoice)
     except SQLAlchemyError as exc:
@@ -1986,6 +2174,7 @@ def update_invoice_status(
     invoice = db.get(models.StudentInvoice, invoice_id)
     if invoice is None:
         raise HTTPException(404, "فاکتور پیدا نشد.")
+    previous_status = invoice.status
     if payload.status == "paid":
         invoice.paid_at = utcnow()
         invoice.payment_reference = payload.payment_reference
@@ -1996,6 +2185,11 @@ def update_invoice_status(
         invoice.payment_reference = None
     invoice.status = payload.status
     invoice.updated_at = utcnow()
+    if previous_status != invoice.status:
+        labels = {"issued": "صادرشده", "paid": "پرداخت‌شده", "void": "باطل‌شده"}
+        _notify_student(db, invoice.student_auth_id, "invoice", "وضعیت فاکتور تغییر کرد",
+                        "وضعیت فاکتور «" + invoice.title + "» به «" + labels.get(invoice.status, invoice.status) + "» تغییر کرد.",
+                        "/dashboard/invoices", f"invoice:{invoice.id}:{invoice.status}:{uuid4().hex}")
     db.commit()
     db.refresh(invoice)
     return _serialize_invoice(invoice, include_private=True)
@@ -2334,6 +2528,10 @@ def mentor_create_weekly_task(
         **payload.model_dump(),
     )
     db.add(task)
+    _notify_student(db, application.student.auth_student_id, "weekly_plan",
+                    "فعالیت جدید به برنامه هفتگی اضافه شد",
+                    "فعالیت «" + task.title + "» برای برنامه هفتگی‌ات ثبت شد.",
+                    "/dashboard/weekly-plan", f"weekly-task:mentor:{assignment.id}:{uuid4().hex}")
     db.commit()
     db.refresh(task)
     return _serialize_managed_task(task)
@@ -2358,6 +2556,10 @@ def mentor_update_weekly_task(
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(task, key, value)
     task.updated_at = utcnow()
+    _notify_student(db, task.student_auth_id, "weekly_plan",
+                    "برنامه هفتگی به‌روزرسانی شد",
+                    "جزئیات فعالیت «" + task.title + "» تغییر کرده است. برنامه‌ات را مرور کن.",
+                    "/dashboard/weekly-plan", f"weekly-task-update:mentor:{task.id}:{uuid4().hex}")
     db.commit()
     db.refresh(task)
     return _serialize_managed_task(task)
@@ -2450,6 +2652,10 @@ def teacher_create_weekly_task(
         **payload.model_dump(),
     )
     db.add(task)
+    _notify_student(db, application.student.auth_student_id, "weekly_plan",
+                    "فعالیت جدید به برنامه هفتگی اضافه شد",
+                    "فعالیت «" + task.title + "» برای برنامه هفتگی‌ات ثبت شد.",
+                    "/dashboard/weekly-plan", f"weekly-task:teacher:{assignment.id}:{uuid4().hex}")
     db.commit()
     db.refresh(task)
     return _serialize_managed_task(task)
@@ -2474,6 +2680,10 @@ def teacher_update_weekly_task(
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(task, key, value)
     task.updated_at = utcnow()
+    _notify_student(db, task.student_auth_id, "weekly_plan",
+                    "برنامه هفتگی به‌روزرسانی شد",
+                    "جزئیات فعالیت «" + task.title + "» تغییر کرده است. برنامه‌ات را مرور کن.",
+                    "/dashboard/weekly-plan", f"weekly-task-update:teacher:{task.id}:{uuid4().hex}")
     db.commit()
     db.refresh(task)
     return _serialize_managed_task(task)
@@ -2691,6 +2901,9 @@ async def teacher_send_message(
     thread.last_message_at = utcnow()
     thread.updated_at = utcnow()
     db.add(message)
+    _notify_student(db, thread.student_auth_id, "message", "پیام جدید از مدرس",
+                    "در گفت‌وگوی «" + thread.subject + "» پیام تازه‌ای دریافت کردی.",
+                    "/dashboard/messages", f"thread:{thread.id}:message:{uuid4().hex}")
     try:
         db.commit()
         db.refresh(message)

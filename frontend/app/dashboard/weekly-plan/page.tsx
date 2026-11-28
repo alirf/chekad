@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fetchStudentWeeklyPlan,
   updateAssignedWeeklyTaskStatus,
+  recordStudentActivity,
   type AssignedWeeklyTask,
 } from "../../../lib/student-auth";
 import {
@@ -129,6 +130,7 @@ export default function StudentWeeklyPlanPage() {
     setNotice("");
     try {
       await updateAssignedWeeklyTaskStatus(task.id, "completed");
+      void recordStudentActivity("task_completed").catch(() => undefined);
       setTasks((current) =>
         current.map((item) =>
           item.id === task.id ? { ...item, status: "completed" } : item,

@@ -46,6 +46,20 @@ export interface StudentService {
   note?: string | null;
 }
 
+export type StudentActivityEvent =
+  | "session_started" | "dashboard_viewed" | "messages_viewed" | "classes_viewed"
+  | "weekly_plan_viewed" | "reports_viewed" | "calendar_viewed" | "invoices_viewed"
+  | "notifications_viewed" | "application_submitted" | "message_sent"
+  | "report_submitted" | "task_completed";
+
+export interface StudentNotification {
+  id: number; category: string; title: string; body: string;
+  href: string; created_at: string; read_at: string | null;
+}
+export interface StudentNotificationsResponse {
+  items: StudentNotification[]; total: number; unread_count: number;
+}
+
 export const STUDENT_SESSION_INVALID_EVENT = "chekad:student-session-invalid";
 
 export class StudentAuthError extends Error {
@@ -140,6 +154,20 @@ export async function fetchStudentServices() {
 
 export async function fetchStudentApplications() {
   return requestJson<{ items: StudentApplication[]; total: number }>("/application/student/applications");
+}
+export async function fetchStudentNotifications() {
+  return requestJson<StudentNotificationsResponse>("/application/student/notifications");
+}
+export async function markStudentNotificationRead(id: number) {
+  return requestJson<StudentNotification>("/application/student/notifications/" + id + "/read", { method: "PATCH" });
+}
+export async function markAllStudentNotificationsRead() {
+  return requestJson<{ updated: number }>("/application/student/notifications/read-all", { method: "POST" });
+}
+export async function recordStudentActivity(eventType: StudentActivityEvent) {
+  return requestJson<{ recorded: boolean; deduplicated?: boolean }>("/application/student/activities", {
+    method: "POST", body: JSON.stringify({ event_type: eventType }),
+  });
 }
 export async function logoutStudent() {
   return requestJson<{ message: string }>("/auth/student/logout", { method: "POST" });

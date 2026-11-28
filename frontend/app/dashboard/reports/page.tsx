@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { createStudentReport, fetchStudentMentorReports, fetchStudentReports, type StudentStudyReport, type StudentMentorReport } from "../../../lib/student-auth";
+import { createStudentReport, fetchStudentMentorReports, fetchStudentReports, recordStudentActivity, type StudentStudyReport, type StudentMentorReport } from "../../../lib/student-auth";
 import { formatPortalDate, PortalEmptyState, PortalPageHeading } from "../../../components/student-portal-ui";
 
 function localDate() {
@@ -57,6 +57,7 @@ export default function StudentReportsPage() {
         blockers: blockers || null,
         next_step: nextStep || null,
       });
+      void recordStudentActivity("report_submitted").catch(() => undefined);
       setTopics(""); setSummary(""); setBlockers(""); setNextStep("");
       setNotice("گزارش مطالعه با موفقیت ثبت شد.");
       await load();

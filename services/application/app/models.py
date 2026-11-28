@@ -318,3 +318,40 @@ class AssignedStudyTask(Base):
     status = Column(String(20), nullable=False, default="pending")
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+
+class StudentNotification(Base):
+    """Persistent, student-scoped notifications for meaningful portal events."""
+
+    __tablename__ = "student_notifications"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_student_notifications_dedupe_key"),
+        Index("ix_student_notifications_student_created", "student_auth_id", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    category = Column(String(30), nullable=False)
+    title = Column(String(180), nullable=False)
+    body = Column(String(700), nullable=False)
+    href = Column(String(240), nullable=False)
+    dedupe_key = Column(String(190), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    read_at = Column(DateTime(timezone=True))
+
+
+class StudentActivity(Base):
+    """Privacy-minimal, allow-listed student activity used for cohort retention."""
+
+    __tablename__ = "student_activities"
+    __table_args__ = (
+        UniqueConstraint("student_auth_id", "event_type", "activity_date", name="uq_student_activities_student_event_date"),
+        Index("ix_student_activities_event_date", "event_type", "activity_date"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    event_type = Column(String(40), nullable=False)
+    activity_date = Column(Date, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)

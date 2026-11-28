@@ -58,4 +58,13 @@ def test_initial_and_privacy_migrations_upgrade_cleanly(tmp_path, monkeypatch):
     assert task_columns["tutor_assignment_id"]["nullable"] is True
     assert any(index["name"] == "uq_student_message_threads_teacher_assignment" and index["unique"] for index in inspector.get_indexes("student_message_threads"))
 
+    assert "student_notifications" in inspector.get_table_names()
+    assert "student_activities" in inspector.get_table_names()
+    notification_columns = {item["name"]: item for item in inspector.get_columns("student_notifications")}
+    activity_columns = {item["name"]: item for item in inspector.get_columns("student_activities")}
+    assert notification_columns["read_at"]["nullable"] is True
+    assert activity_columns["event_type"]["nullable"] is False
+    assert any(index["name"] == "ix_student_notifications_student_created" for index in inspector.get_indexes("student_notifications"))
+    assert any(index["name"] == "ix_student_activities_event_date" for index in inspector.get_indexes("student_activities"))
+
     engine.dispose()

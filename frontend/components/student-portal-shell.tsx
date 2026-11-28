@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { fetchStudentMessageThreads } from "../lib/student-auth";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { fetchStudentMessageThreads, recordStudentActivity, type StudentActivityEvent } from "../lib/student-auth";
+import { StudentNotificationIndicator } from "./student-notification-indicator";
 import { useStudentSession } from "./student-session-provider";
 
 const navigation = [
   { href: "/dashboard", title: "صفحه شخصی", icon: "home" },
   { href: "/dashboard/messages", title: "پیام‌ها", icon: "message" },
+  { href: "/dashboard/notifications", title: "اعلان‌ها", icon: "notification" },
   { href: "/dashboard/classes", title: "کلاس‌ها", icon: "class" },
   { href: "/dashboard/exams", title: "آزمون‌ها", icon: "exam" },
   { href: "/dashboard/weekly-plan", title: "برنامه هفتگی", icon: "plan" },
@@ -20,6 +22,7 @@ const navigation = [
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   "/dashboard": { title: "صفحه شخصی", subtitle: "مرور وضعیت و فعالیت‌های مسیر المپیاد" },
   "/dashboard/messages": { title: "پیام‌ها", subtitle: "گفت‌وگو با پشتیبانی، منتور و مدرس خصوصی" },
+  "/dashboard/notifications": { title: "اعلان‌ها", subtitle: "پیگیری تغییرات و رویدادهای مهم حساب" },
   "/dashboard/classes": { title: "کلاس‌ها", subtitle: "کلاس‌های خصوصی و جلسات برنامه‌ریزی‌شده" },
   "/dashboard/exams": { title: "آزمون‌ها", subtitle: "دسترسی به آزمون‌های منتشرشده چکاد" },
   "/dashboard/weekly-plan": { title: "برنامه هفتگی", subtitle: "برنامه مطالعه و فعالیت‌های هفته" },
@@ -32,6 +35,7 @@ function PortalIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     home: "M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z",
     message: "M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-4-.9L3 21l1.5-4A8.2 8.2 0 0 1 3 12c0-4.7 4-8.5 9-8.5s9 3.3 9 8z",
+    notification: "M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4",
     class: "M3 5.5h18v12H3z M8 21h8 M12 17.5V21",
     exam: "M7 3h10v3H7z M6 6H4v15h16V6h-2 M8 11h8 M8 15h6",
     plan: "M4 5h16v16H4z M8 3v4 M16 3v4 M4 10h16 M8 14h3 M8 17h6",
@@ -54,10 +58,34 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const sessionStartedRef = useRef(false);
   const studentName = student
     ? student.first_name + " " + student.last_name
     : "";
   const page = useMemo(() => pageTitles[pathname] || pageTitles["/dashboard"], [pathname]);
+
+  useEffect(() => {
+    if (status === "authenticated" && !sessionStartedRef.current) {
+      sessionStartedRef.current = true;
+      void recordStudentActivity("session_started").catch(() => undefined);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    const events: Record<string, StudentActivityEvent> = {
+      "/dashboard": "dashboard_viewed",
+      "/dashboard/messages": "messages_viewed",
+      "/dashboard/notifications": "notifications_viewed",
+      "/dashboard/classes": "classes_viewed",
+      "/dashboard/weekly-plan": "weekly_plan_viewed",
+      "/dashboard/reports": "reports_viewed",
+      "/dashboard/calendar": "calendar_viewed",
+      "/dashboard/invoices": "invoices_viewed",
+    };
+    const eventType = events[pathname];
+    if (eventType) void recordStudentActivity(eventType).catch(() => undefined);
+  }, [pathname, status]);
 
   useEffect(() => {
     if (status === "guest") {
@@ -168,10 +196,7 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
           </div>
           <div className="student-portal-topbar-actions">
             {logoutError && <span role="alert" className="student-portal-inline-notice">{logoutError}</span>}
-            <Link href="/dashboard/messages" className="student-portal-notification" aria-label="پیام‌ها">
-              <PortalIcon name="message" />
-              {unread > 0 && <i />}
-            </Link>
+            <StudentNotificationIndicator />
             <span className="student-portal-topbar-user"><span>{studentName ? studentName.trim().slice(0, 1) : "د"}</span>{studentName || "دانش‌آموز"}</span>
             <button type="button" className="student-portal-topbar-logout" onClick={handleLogout} disabled={loggingOut}>
               <PortalIcon name="logout" /> {loggingOut ? "..." : "خروج"}

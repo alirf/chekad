@@ -11,6 +11,7 @@ import {
   fetchStudentThreadMessages,
   openPortalMessageSocket,
   sendStudentMessage,
+  recordStudentActivity,
   type PortalMessage,
   type PortalMessageThread,
 } from "../../../lib/student-auth";
@@ -151,6 +152,7 @@ export default function StudentMessagesPage() {
     setNotice("");
     try {
       await sendStudentMessage(selected.id, draft.trim());
+      void recordStudentActivity("message_sent").catch(() => undefined);
       setDraft("");
       await loadMessages(selected.id);
       await loadThreads();

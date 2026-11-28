@@ -3,6 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { ApiError, submitPublicApplication } from "../lib/api";
+import { recordStudentActivity } from "../lib/student-auth";
 import { useStudentSession } from "./student-session-provider";
 
 type RequestKind = "mentorship" | "tutoring";
@@ -60,6 +61,7 @@ export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boo
       });
 
       setSuccess({ requestId: result.request_id, message: result.message });
+      void recordStudentActivity("application_submitted").catch(() => undefined);
       form.reset();
     } catch (submissionError) {
       setError(
