@@ -35,6 +35,37 @@ jobs:
       - name: Next.js production build
         run: npm run build
 
+  auth-service:
+    name: Authentication API tests and migrations
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth
+    env:
+      DB_URL: sqlite:///./auth-ci.db
+      MIGRATION_DB_URL: sqlite:///./auth-migration-ci.db
+      JWT_SECRET: test-only-student-auth-secret-with-more-than-32-bytes
+      JWT_EXPIRE_MINUTES: "30"
+      JWT_ISSUER: chekad-auth-tests
+      JWT_AUDIENCE: chekad-admin
+      AUTH_COOKIE_SECURE: "false"
+      APP_ENV: test
+      STUDENT_REGISTRATION_ENABLED: "true"
+      PYTHONPATH: ${{ github.workspace }}/services/auth
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install auth and test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Verify Alembic migrations
+        run: alembic upgrade head
+      - name: Run authentication API tests
+        run: python -m pytest -q
+
   application-service:
     name: Application API tests and migrations
     runs-on: ubuntu-latest
