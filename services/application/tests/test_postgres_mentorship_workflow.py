@@ -254,10 +254,16 @@ def test_postgres_serializes_two_concurrent_selections_for_one_application(
         assert sum(offer.status == "withdrawn" for offer in offers) == 1
 
 
+async def fake_mentor_with_capacity_one(kind: str, person_id: int):
+    person = await fake_mentor(kind, person_id)
+    person["capacity"] = 1
+    return person
+
+
 def test_postgres_advisory_lock_prevents_mentor_capacity_oversubscription(
     api_dependencies, monkeypatch
 ):
-    monkeypatch.setattr(application_module, "fetch_public_person", fake_mentor)
+    monkeypatch.setattr(application_module, "fetch_public_person", fake_mentor_with_capacity_one)
     # Both requests compete for the last slot of the same mentor.
     with SessionLocal() as db:
         application_ids = []
