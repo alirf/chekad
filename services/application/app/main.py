@@ -1639,8 +1639,11 @@ async def create_assignment(
     )
     if application is None:
         raise HTTPException(404, "درخواست پیدا نشد.")
-    if application.status in {"rejected", "cancelled", "completed"}:
-        raise HTTPException(409, "برای درخواست بسته‌شده نمی‌توان تخصیص فعال ایجاد کرد.")
+    if application.status != "accepted":
+        raise HTTPException(
+            409,
+            "تخصیص فقط پس از بررسی پیشنهادها و تأیید صریح دانش‌آموز امکان‌پذیر است.",
+        )
     if application.field != person["field"]:
         raise HTTPException(422, "رشته منتور یا مدرس با رشته درخواست مطابقت ندارد.")
 

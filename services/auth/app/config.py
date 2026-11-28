@@ -24,8 +24,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def enforce_secure_cookie_in_production(self):
-        if self.app_env.lower() == "production" and not self.auth_cookie_secure:
-            raise ValueError("AUTH_COOKIE_SECURE must be true when APP_ENV=production")
+        if self.app_env.lower() == "production":
+            if not self.auth_cookie_secure:
+                raise ValueError("AUTH_COOKIE_SECURE must be true when APP_ENV=production")
+            origin = urlsplit(self.public_site_origin.strip())
+            if origin.scheme != "https" or not origin.netloc or origin.path not in ("", "/") or origin.query or origin.fragment:
+                raise ValueError("PUBLIC_SITE_ORIGIN must be an HTTPS origin when APP_ENV=production")
         return self
 
     @field_validator("jwt_secret")
