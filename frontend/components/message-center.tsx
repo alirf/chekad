@@ -192,7 +192,6 @@ export function MessageCenter({
                 placeholder="جست‌وجوی گفتگو..."
                 aria-label="جست‌وجوی گفتگوها"
               />
-              <kbd>/</kbd>
             </label>
 
             <div className={styles.filters} role="group" aria-label="فیلتر گفتگوها">

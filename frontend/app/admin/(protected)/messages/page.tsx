@@ -70,10 +70,7 @@ export default function AdminMessagesPage() {
   }, [filter]);
 
   useEffect(() => {
-    if (selectedId === null) {
-      setMessages([]);
-      return;
-    }
+    if (selectedId === null) return;
     let active = true;
     let socket: WebSocket | null = null;
     let retry: number | null = null;
