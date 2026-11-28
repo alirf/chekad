@@ -65,11 +65,7 @@ export default function StudentMessagesPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedId === null) {
-      setMessages([]);
-      setLive(false);
-      return;
-    }
+    if (selectedId === null) return;
     let active = true;
     let socket: WebSocket | null = null;
     let reconnect: ReturnType<typeof setTimeout> | null = null;

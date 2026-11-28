@@ -20,27 +20,26 @@ export default function StudentOnlineExamPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(0);
+  const validExamId = Number.isSafeInteger(examId) && examId > 0;
 
   const loadAttempt = useCallback(async () => {
     const current = await fetchStudentExamAttempt(examId);
+    setNow(Date.now());
     setAttempt(current);
     const values: Record<number, string> = {};
     for (const question of current.questions || []) values[question.id] = question.answer_text || "";
     setAnswers(values);
     if (current.status === "graded" && current.results_published) setResult(await fetchStudentExamResult(examId));
     else setResult(null);
-  }, [examId]);
+  }, [examId, validExamId]);
 
   useEffect(() => {
-    if (!Number.isSafeInteger(examId) || examId < 1) {
-      setError("شناسه آزمون معتبر نیست.");
-      setLoading(false);
-      return;
-    }
+    if (!validExamId) return;
     let active = true;
     fetchStudentExamAttempt(examId).then(async (current) => {
       if (!active) return;
+      setNow(Date.now());
       setAttempt(current);
       const values: Record<number, string> = {};
       for (const question of current.questions || []) values[question.id] = question.answer_text || "";
@@ -55,7 +54,7 @@ export default function StudentOnlineExamPage() {
       }
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [examId]);
+  }, [examId, validExamId]);
 
   useEffect(() => {
     if (!attempt || attempt.status !== "in_progress") return;
@@ -124,6 +123,10 @@ export default function StudentOnlineExamPage() {
       setNotice("کارنامه دریافت شد.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "کارنامه هنوز منتشر نشده است."); }
     finally { setBusy(false); }
+  }
+
+  if (!validExamId) {
+    return <div className="student-portal-page"><PortalPageHeading title="شناسه آزمون نامعتبر است" description="لینک آزمون معتبر نیست؛ از فهرست آزمون‌ها دوباره وارد شو." action={<Link className="student-portal-button secondary" href="/dashboard/exams">بازگشت به آزمون‌ها</Link>} /></div>;
   }
 
   return (
