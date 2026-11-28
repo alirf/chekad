@@ -1,3 +1,5 @@
+import { STUDENT_SESSION_INVALID_EVENT } from "./student-auth";
+
 export type OlympiadField = "physics" | "computer";
 export type PeopleKind = "mentors" | "tutors";
 
@@ -125,6 +127,9 @@ export async function submitPublicApplication(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(STUDENT_SESSION_INVALID_EVENT));
+    }
     if (response.status === 422) {
       throw new ApiError("برخی اطلاعات واردشده معتبر نیستند. فرم را بررسی کنید.", "http", 422);
     }

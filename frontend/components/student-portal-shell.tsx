@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { fetchStudentMessageThreads, StudentAuthError } from "../lib/student-auth";
+import { fetchStudentMessageThreads } from "../lib/student-auth";
 import { useStudentSession } from "./student-session-provider";
 
 const navigation = [
@@ -73,11 +73,7 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
           setUnread(result.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
         }
       })
-      .catch((cause) => {
-        if (active && cause instanceof StudentAuthError && cause.status === 401) {
-          void refreshSession();
-        }
-      });
+      .catch(() => undefined);
 
     return () => {
       active = false;
