@@ -58,3 +58,43 @@ Restore drops and recreates the four service databases using the migrator roles 
 ### Recovery checks
 
 At least monthly, restore the latest snapshot into an isolated test environment, run database migrations/health checks, and verify representative media files. A successful backup command alone is not proof of recoverability. Keep at least one encrypted copy outside the server; the local `./backups` directory does not protect against host or disk loss.
+
+
+## Production Gateway (TLS)
+
+The default Compose file intentionally remains HTTP-only for local development.
+For production, provision a TLS certificate before starting the gateway. The
+certificate directory mounted into the container must contain the actual
+`fullchain.pem` and `privkey.pem` files (not broken symlinks).
+
+Set these values in the production `.env` file:
+
+```dotenv
+APP_ENV=production
+PUBLIC_SITE_ORIGIN=https://your-domain.example
+AUTH_COOKIE_SECURE=true
+GATEWAY_PORT=80
+GATEWAY_HTTPS_PORT=443
+TLS_CERT_DIR=/absolute/path/to/tls
+```
+
+Keep the existing production requirements for `JWT_SECRET`, `OTP_HASH_SECRET`,
+and the HTTPS SMS gateway configuration. Do not commit the `.env` file or
+private key material.
+
+Validate and start with the production override:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.production.yml config
+docker compose -f docker-compose.yml -f docker-compose.production.yml up -d --build
+```
+
+The gateway redirects HTTP requests to HTTPS, negotiates TLS 1.2/1.3, sends HSTS
+and the existing security headers, and overwrites forwarded client-IP headers
+with the address observed at the edge gateway. This assumes the Nginx gateway
+is the public edge; do not place an unconfigured proxy in front of it. Renew
+certificates on the host and restart the gateway after renewal:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.production.yml restart gateway
+```
