@@ -9,6 +9,7 @@
 5. Capacity is rechecked under a per-provider PostgreSQL advisory lock, and assignment plus session records are committed together.
 
 The in-app message thread remains available for questions and coordination, but it is no longer the source of truth for the student’s selection.
+
 ## PostgreSQL and media backups
 
 The optional `backup` Compose profile creates a compressed snapshot immediately when started, then repeats it every `BACKUP_INTERVAL_SECONDS` (default: 24 hours). Each snapshot contains:
@@ -36,6 +37,7 @@ docker compose --profile backup run --rm --entrypoint /bin/sh backup /scripts/ba
 1. Stop application writers while keeping PostgreSQL running:
 
 ```sh
+docker compose --profile backup stop backup
 docker compose stop gateway frontend auth-service application-service people-service content-service application-retention
 ```
 

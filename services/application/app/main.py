@@ -820,7 +820,15 @@ def admin_applications(
             ))
         total += query.count()
         for row in query.order_by(model.created_at.desc(), model.id.desc()).limit(limit + offset).all():
-            collected.append(_serialize_application(row, application_kind))
+            item = _serialize_application(row, application_kind)
+            selected_offer = db.query(models.ApplicationOffer).filter_by(
+                application_kind=application_kind, application_id=row.id, status="selected"
+            ).first()
+            item["selected_offer"] = (
+                {"person_id": selected_offer.person_id, "person_name": selected_offer.person_name}
+                if selected_offer is not None else None
+            )
+            collected.append(item)
 
     collected.sort(key=lambda item: (item["created_at"], item["id"]), reverse=True)
     return {"items": collected[offset:offset + limit], "total": total, "limit": limit, "offset": offset}
@@ -838,6 +846,13 @@ def admin_application_detail(
     if row is None:
         raise HTTPException(404, "درخواست پیدا نشد.")
     result = _serialize_application(row, kind)
+    selected_offer = db.query(models.ApplicationOffer).filter_by(
+        application_kind=kind, application_id=row.id, status="selected"
+    ).first()
+    result["selected_offer"] = (
+        {"person_id": selected_offer.person_id, "person_name": selected_offer.person_name}
+        if selected_offer is not None else None
+    )
     notes = db.query(models.InternalNote).filter_by(
         application_type=kind, application_id=application_id
     ).order_by(models.InternalNote.created_at.desc(), models.InternalNote.id.desc()).all()
@@ -1747,25 +1762,27 @@ async def create_application_offer(
     existing = db.query(models.ApplicationOffer).filter_by(
         application_kind=kind, application_id=application.id, person_id=payload.person_id
     ).first()
-    if existing is not None:
-        if existing.status == "selected":
-            raise HTTPException(409, "این درخواست قبلاً یک پیشنهاد انتخاب‌شده دارد.")
-        raise HTTPException(409, "این فرد قبلاً برای این درخواست پیشنهاد شده است.")
+    if existing is not None and existing.status in {"selected", "proposed"}:
+        raise HTTPException(409, "این فرد برای این درخواست قبلاً پیشنهاد فعال یا انتخاب‌شده دارد.")
     person_name = (person.get("first_name", "") + " " + person.get("last_name", "")).strip()[:180]
-    offer = models.ApplicationOffer(
-        application_kind=kind,
-        application_id=application.id,
-        person_id=payload.person_id,
-        person_name=person_name or "همراه آموزشی",
-        field=application.field,
-        description=payload.description,
-        price_toman=payload.price_toman,
-        terms=payload.terms,
-        expires_at=payload.expires_at,
-        status="proposed",
-        created_by_admin_id=admin["id"],
-    )
-    db.add(offer)
+    if existing is None:
+        offer = models.ApplicationOffer(
+            application_kind=kind, application_id=application.id, person_id=payload.person_id,
+            person_name=person_name or "همراه آموزشی", field=application.field,
+            description=payload.description, price_toman=payload.price_toman,
+            terms=payload.terms, expires_at=payload.expires_at, status="proposed",
+            created_by_admin_id=admin["id"],
+        )
+        db.add(offer)
+    else:
+        offer = existing
+        offer.person_name = person_name or "همراه آموزشی"
+        offer.description = payload.description
+        offer.price_toman = payload.price_toman
+        offer.terms = payload.terms
+        offer.expires_at = payload.expires_at
+        offer.status = "proposed"
+        offer.created_by_admin_id = admin["id"]
     application.status = "options_proposed"
     _notify_student(
         db, application.student.auth_student_id if application.student else None,
