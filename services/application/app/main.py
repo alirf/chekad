@@ -190,7 +190,7 @@ def create_student(db: Session, payload, authenticated_student: dict) -> models.
     student.last_name = authenticated_student["last_name"]
     student.grade = authenticated_student["grade"]
     student.field = authenticated_student["field"]
-    student.parent_phone = authenticated_student["guardian_phone"]
+    student.parent_phone = payload.guardian_phone
     db.flush()
     return student
 

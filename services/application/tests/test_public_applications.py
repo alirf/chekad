@@ -117,15 +117,16 @@ def test_mentorship_application_is_persisted_without_student_phone(client, db_se
     assert student.phone is None
     assert student.auth_student_id == AUTHENTICATED_STUDENT["id"]
     assert student.first_name == AUTHENTICATED_STUDENT["first_name"]
-    assert student.parent_phone == AUTHENTICATED_STUDENT["guardian_phone"]
+    assert student.parent_phone == "+989123456789"
     assert application.student_id == student.id
     assert application.guardian_consent_at is not None
     assert application.privacy_accepted_at is not None
-    assert application.privacy_notice_version == "2026-11-27-v1"
+    assert application.privacy_notice_version == "2026-11-28-v3"
     assert "برنامه‌ریزی و پیگیری" in application.student_note
 
 
-def test_tutoring_application_is_persisted(client, db_session):
+def test_tutoring_application_is_persisted(client, db_session, monkeypatch):
+    monkeypatch.setitem(AUTHENTICATED_STUDENT, "field", "computer")
     response = client.post(
         "/tutoring-applications",
         json={
