@@ -17,7 +17,7 @@ export default function TeacherMessagesPage(){
  const selected=useMemo(()=>threads.find(x=>x.id===selectedId)||null,[threads,selectedId]);
  async function loadThreads(){const r=await fetchTeacherThreads();setThreads(r.items);setSelectedId(v=>v&&r.items.some(x=>x.id===v)?v:(r.items[0]?.id??null));}
  useEffect(()=>{let active=true;fetchTeacherThreads().then(r=>{if(active){setThreads(r.items);setSelectedId(r.items[0]?.id??null);}}).catch(e=>{if(!active)return;if((e instanceof TeacherAuthError||e instanceof TeacherPortalError)&&e.status===401)router.replace("/teacher/login");else setError(e instanceof Error?e.message:"دریافت گفت‌وگوها انجام نشد.");}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[router]);
- useEffect(()=>{if(selectedId===null)return;let active=true,socket:WebSocket|null=null,retry:ReturnType<typeof setTimeout>|null=null,fallback:ReturnType<typeof setInterval>|null=null;
+ useEffect(()=>{if(selectedId===null)return;let active=true,socket:WebSocket|null=null,retry:ReturnType<typeof window.setTimeout>|null=null,fallback:ReturnType<typeof window.setInterval>|null=null;
   const refresh=()=>{void fetchTeacherThreadMessages(selectedId).then(r=>{if(active)setMessages(r.items);}).catch(e=>{if(active)setError(e instanceof Error?e.message:"دریافت پیام‌ها انجام نشد.");});};
   const startFallback=()=>{if(!fallback&&active)fallback=window.setInterval(refresh,12000);};
   const stopFallback=()=>{if(fallback)window.clearInterval(fallback);fallback=null;};

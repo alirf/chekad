@@ -80,8 +80,13 @@ export async function sendTeacherMessage(threadId: number, body: string) {
     body: JSON.stringify({ body }),
   });
 }
-export function openTeacherMessageSocket(threadId: number, onMessage: (message: PortalMessage) => void, onClose?: () => void) {
-  return openPortalMessageSocket("teacher", threadId, onMessage, undefined, onClose);
+export function openTeacherMessageSocket(
+  threadId: number,
+  onMessage: (message: PortalMessage) => void,
+  onOpen?: () => void,
+  onClose?: () => void,
+) {
+  return openPortalMessageSocket("teacher", threadId, onMessage, onOpen, onClose);
 }
 export async function fetchTeacherWeeklyPlan(assignmentId: number, start?: string, end?: string) {
   const params = new URLSearchParams();

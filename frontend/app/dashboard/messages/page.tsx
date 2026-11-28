@@ -68,8 +68,8 @@ export default function StudentMessagesPage() {
     if (selectedId === null) return;
     let active = true;
     let socket: WebSocket | null = null;
-    let reconnect: ReturnType<typeof setTimeout> | null = null;
-    let fallback: ReturnType<typeof setInterval> | null = null;
+    let reconnect: ReturnType<typeof window.setTimeout> | null = null;
+    let fallback: ReturnType<typeof window.setInterval> | null = null;
 
     const refresh = () => {
       void fetchStudentThreadMessages(selectedId).then((result) => {
