@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { MentorAuthError } from "../../../../lib/mentor-auth";
 import {
   createMentorWeeklyReport,
@@ -37,8 +38,7 @@ export default function MentorReportsPage() {
       fetchAssignedStudentStudyReports(id),
       fetchMentorWeeklyReports(id),
     ]);
-    setStudyReports(study.items);
-    setWeeklyReports(weekly.items);
+    return { studyReports: study.items, weeklyReports: weekly.items };
   }, []);
 
   useEffect(() => {
@@ -56,19 +56,24 @@ export default function MentorReportsPage() {
       })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (selectedId === null) return;
     let active = true;
     loadSelected(selectedId)
+      .then((result) => {
+        if (!active) return;
+        setStudyReports(result.studyReports);
+        setWeeklyReports(result.weeklyReports);
+      })
       .catch((cause) => {
         if (!active) return;
         if ((cause instanceof MentorPortalError || cause instanceof MentorAuthError) && cause.status === 401) setError("نشست مشاور منقضی شده است. لطفاً دوباره وارد شو.");
         else setError(cause instanceof Error ? cause.message : "دریافت گزارش‌ها انجام نشد.");
       });
     return () => { active = false; };
-  }, [selectedId, loadSelected, router]);
+  }, [selectedId, loadSelected]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +83,9 @@ export default function MentorReportsPage() {
       await createMentorWeeklyReport(selected.id, Number(week), content.trim());
       setContent("");
       setNotice("گزارش هفتگی برای دانش‌آموز ثبت شد.");
-      await loadSelected(selected.id);
+      const refreshed = await loadSelected(selected.id);
+      setStudyReports(refreshed.studyReports);
+      setWeeklyReports(refreshed.weeklyReports);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "ثبت گزارش هفتگی انجام نشد.");
     } finally { setSaving(false); }
@@ -87,7 +94,7 @@ export default function MentorReportsPage() {
   return (
     <div className="space-y-5">
       <div><p className="text-xs font-bold tracking-widest text-blue-600">STUDENT PROGRESS</p><h1 className="mt-1 text-2xl font-black text-slate-900">گزارش‌های مطالعه و بازخورد هفتگی</h1><p className="mt-1 text-sm text-slate-500">گزارش‌های دانش‌آموزان تخصیص‌یافته را مرور و برای هر هفته بازخورد ثبت کن.</p></div>
-      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error} {error.includes("نشست مشاور") && <a className="mr-2 font-bold underline" href="/mentor/login">ورود مجدد</a>}</div>}
+      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error} {error.includes("نشست مشاور") && <Link className="mr-2 font-bold underline" href="/mentor/login">ورود مجدد</Link>}</div>}
       {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">{notice}</div>}
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <label className="grid max-w-xl gap-2 text-xs font-bold text-slate-700">دانش‌آموز / تخصیص فعال
