@@ -238,6 +238,18 @@ services:
       PGPORT: 5432
       PGUSER: ${POSTGRES_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD}
+      AUTH_DB_NAME: ${AUTH_DB_NAME:-chekad_auth}
+      APP_DB_NAME: ${APP_DB_NAME:-chekad_application}
+      PEOPLE_DB_NAME: ${PEOPLE_DB_NAME:-chekad_people}
+      CONTENT_DB_NAME: ${CONTENT_DB_NAME:-chekad_content}
+      AUTH_DB_MIGRATOR: ${AUTH_DB_MIGRATOR:-chekad_auth_migrator}
+      APP_DB_MIGRATOR: ${APP_DB_MIGRATOR:-chekad_application_migrator}
+      PEOPLE_DB_MIGRATOR: ${PEOPLE_DB_MIGRATOR:-chekad_people_migrator}
+      CONTENT_DB_MIGRATOR: ${CONTENT_DB_MIGRATOR:-chekad_content_migrator}
+      AUTH_DB_USER: ${AUTH_DB_USER:-chekad_auth_app}
+      APP_DB_USER: ${APP_DB_USER:-chekad_application_app}
+      PEOPLE_DB_USER: ${PEOPLE_DB_USER:-chekad_people_app}
+      CONTENT_DB_USER: ${CONTENT_DB_USER:-chekad_content_app}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
     volumes:

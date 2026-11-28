@@ -3,19 +3,17 @@
 ## Mentor / tutor selection workflow
 
 1. The student submits a mentorship or tutoring request from their authenticated account.
-2. The operations team reviews the request and changes its status to `options_proposed`; candidate options and terms are shared with the student through the in-app message thread.
-3. The student confirms their choice in that thread. The operations team then marks the application `accepted`.
-4. The assignment screen lists only `accepted` requests. An administrator selects the matching active public mentor/tutor, verifies field and available capacity, and schedules the sessions.
-5. The backend rejects assignment creation unless the application is `accepted`, rechecks capacity under a per-provider PostgreSQL advisory lock, and prevents two active assignments for the same application. Assignment and session records are committed together.
+2. Operations reviews the request and sends one or more structured offers from the admin assignment area. Each offer stores the public mentor/tutor, description, optional price, terms, and optional expiry.
+3. The student opens `/dashboard/requests`, compares the options, and explicitly selects one. The API locks the application, records the selected offer, closes the other offers, and changes the application status to `accepted`.
+4. The assignment screen lists only accepted requests. The administrator must assign the exact person selected by the student; the backend rejects a different person or an offer that was not selected.
+5. Capacity is rechecked under a per-provider PostgreSQL advisory lock, and assignment plus session records are committed together.
 
-This is intentionally a human-confirmed workflow: the student's selection is recorded in the message conversation, while final assignment and scheduling remain an administrator action.
-
-
+The in-app message thread remains available for questions and coordination, but it is no longer the source of truth for the student’s selection.
 ## PostgreSQL and media backups
 
 The optional `backup` Compose profile creates a compressed snapshot immediately when started, then repeats it every `BACKUP_INTERVAL_SECONDS` (default: 24 hours). Each snapshot contains:
 
-- A cluster-wide `pg_dumpall` SQL export (all Chekad databases and roles, with clean/if-exists restore statements).
+- Four independent PostgreSQL custom-format dumps (auth, application, people, and content databases). Role names/passwords are provisioned from the deployment `.env` and `infra/postgres/init-databases.sh`.
 - The `chekad_media` volume archive.
 - SHA-256 checksums for both files.
 
@@ -53,7 +51,7 @@ docker compose --profile backup run --rm --entrypoint /bin/sh backup /scripts/re
 docker compose up -d
 ```
 
-Restore drops/recreates databases and roles represented in the dump and replaces the media volume contents. It is destructive: use `--confirm` only after checking the snapshot and ensuring a current backup exists. Do not run restore while application services are writing. The restore script verifies SHA-256 checksums before changing data.
+Restore drops and recreates the four service databases using the migrator roles configured in `.env`, restores their contents, and reapplies runtime grants. It does not store role passwords: keep `.env` and its secrets in a separate encrypted secret store. The media volume is replaced. This is destructive: use `--confirm` only after checking the snapshot and ensuring a current backup exists. Do not run restore while application services are writing. The restore script verifies SHA-256 checksums before changing data.
 
 ### Recovery checks
 
