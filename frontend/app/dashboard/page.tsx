@@ -44,6 +44,7 @@ export default function StudentDashboardPage() {
   const [classCount, setClassCount] = useState(0);
   const [reportCount, setReportCount] = useState(0);
   const [taskCount, setTaskCount] = useState(0);
+  const [scheduleReferenceTime, setScheduleReferenceTime] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -65,7 +66,10 @@ export default function StudentDashboardPage() {
         if (!active) return;
         const [requestResult, eventResult, threadResult, classResult, reportResult, taskResult] = results;
         if (requestResult.status === "fulfilled") setApplications(requestResult.value.items);
-        if (eventResult.status === "fulfilled") setEvents(eventResult.value.items);
+        if (eventResult.status === "fulfilled") {
+          setEvents(eventResult.value.items);
+          setScheduleReferenceTime(Date.parse(eventResult.value.fetched_at));
+        }
         if (threadResult.status === "fulfilled") setUnread(threadResult.value.items.reduce((sum, item) => sum + (item.unread_count || 0), 0));
         if (classResult.status === "fulfilled") setClassCount(classResult.value.items.length);
         if (reportResult.status === "fulfilled") setReportCount(reportResult.value.total);
@@ -88,12 +92,12 @@ export default function StudentDashboardPage() {
   }, [router]);
 
   const upcoming = useMemo(() => {
-    const now = Date.now();
+    if (scheduleReferenceTime === null) return [];
     return events
-      .filter((event) => new Date(event.starts_at).getTime() >= now)
+      .filter((event) => new Date(event.starts_at).getTime() >= scheduleReferenceTime)
       .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
       .slice(0, 3);
-  }, [events]);
+  }, [events, scheduleReferenceTime]);
 
   if (loading) return <div className="student-portal-loading">در حال بارگذاری صفحه شخصی...</div>;
   if (!student) return <div className="student-portal-error" role="alert">{error || "اطلاعات حساب در دسترس نیست."}</div>;

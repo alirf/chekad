@@ -241,7 +241,8 @@ export async function deleteStudentStudyTask(taskId: number) {
   return requestJson<void>("/application/student/study-tasks/" + taskId, { method: "DELETE" });
 }
 export async function fetchStudentSchedule() {
-  return requestJson<{ items: StudentScheduleEvent[]; total: number }>("/application/student/schedule");
+  const result = await requestJson<{ items: StudentScheduleEvent[]; total: number }>("/application/student/schedule");
+  return { ...result, fetched_at: new Date().toISOString() };
 }
 export async function fetchStudentClasses() {
   return requestJson<{ items: StudentClassRecord[]; total: number }>("/application/student/classes");
