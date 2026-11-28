@@ -1612,7 +1612,34 @@ body:has(.student-portal-shell) { padding-bottom:0 !important; }
   .student-message-bubble { max-width:90%; }
 }
 
-.student-portal-topbar-logout { min-height:36px; display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #f0dfdf; border-radius:9px; color:#a65c61; background:#fffafa; font-size:9px; font-weight:850; }
-.student-portal-topbar-logout svg { width:14px; height:14px; }
-.student-portal-topbar-logout:hover { background:#fff1f1; }
-.student-portal-topbar-logout:disabled { opacity:.5; cursor:wait; }
+
+/* Expanded student portal states */
+.student-message-bubble.from-mentor { align-self:flex-end; border-color:#d6e9de; border-radius:13px 13px 3px 13px; background:#effaf4; }
+.student-message-sender { display:block; margin-bottom:3px; color:#39765c; font-size:8px; font-weight:900; }
+.student-portal-status.status-paid { border-color:#d5ede0; color:#277354; background:#eff9f3; }
+.student-portal-status.status-issued,.student-portal-status.status-overdue { border-color:#f0e3c9; color:#9a6d2e; background:#fff9ed; }
+.student-portal-status.status-void { border-color:#f0d9d9; color:#9e5555; background:#fff5f5; }
+.student-exam-list,.student-invoice-list { display:grid; gap:12px; }
+.student-exam-card { display:grid; gap:13px; }
+.student-exam-card-main { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.student-exam-card-main h3 { margin:4px 0 3px; color:#294662; font-size:16px; font-weight:900; }
+.student-exam-card-main p { max-width:750px; margin:0; color:#8997a7; font-size:10px; line-height:2; }
+.student-exam-status { display:grid; justify-items:end; gap:4px; }
+.student-exam-status small { color:#a0aab6; font-size:8px; white-space:nowrap; }
+.student-exam-meta { display:flex; flex-wrap:wrap; gap:8px 18px; padding-top:10px; border-top:1px solid #eef1f5; color:#8795a5; font-size:9px; }
+.student-exam-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.student-invoice-item { padding:15px; border:1px solid #edf0f4; border-radius:12px; background:#fff; }
+.student-invoice-item-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.student-invoice-item-head > div { min-width:0; display:grid; }
+.student-invoice-item-head strong { color:#40556d; font-size:11px; }
+.student-invoice-item-head small { margin-top:3px; color:#9aa6b2; font-size:9px; }
+.student-invoice-item-meta { display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:10px; color:#929eac; font-size:9px; }
+.student-invoice-item-meta strong { color:#1b67c7; font-size:12px; }
+.student-invoice-item > p { margin:9px 0 0; color:#77879a; font-size:10px; line-height:1.9; white-space:pre-wrap; }
+.student-invoice-instructions { margin-top:9px; padding:10px 12px; border-radius:9px; color:#876b43; background:#fff8eb; font-size:9px; line-height:1.9; white-space:pre-wrap; }
+.student-invoice-instructions b { color:#73552e; }
+.student-invoice-paid-note { display:block; margin-top:9px; color:#43836a; font-size:9px; }
+@media (max-width: 680px) {
+  .student-exam-card-main { flex-direction:column; }
+  .student-exam-status { justify-items:start; }
+}

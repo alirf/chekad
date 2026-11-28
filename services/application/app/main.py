@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from uuid import uuid4
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
@@ -15,8 +16,13 @@ from app.db import engine, get_db
 from app import models
 from app.schemas import (
     AdminApplicationStatusUpdate,
+    AdminAssignmentCreate,
+    AdminAssignmentStatusUpdate,
+    AdminInvoiceStatusUpdate,
+    StudentInvoiceCreate,
     InternalNoteCreate,
     MentorshipApplicationCreate,
+    MentorWeeklyReportCreate,
     PublicApplicationCreated,
     StudentMessageCreate,
     StudentMessageThreadCreate,
@@ -28,8 +34,8 @@ from app.schemas import (
 
 app = FastAPI(
     title=f"Chekad {settings.service_name}",
-    version="0.5.0",
-    description="Student-facing portal, messaging and study workflow for Chekad.",
+    version="0.6.0",
+    description="Student-facing portal, mentoring, messaging, scheduling and billing workflows for Chekad.",
 )
 PRIVACY_NOTICE_VERSION = "2026-11-28-v3"
 APPLICATION_STATUSES = {
@@ -152,6 +158,68 @@ async def require_student(request: Request) -> dict:
     if student["field"] not in ("physics", "computer"):
         raise HTTPException(503, "رشته المپیاد حساب معتبر نیست.")
     return student
+
+
+async def require_mentor(request: Request) -> dict:
+    headers = {}
+    if request.headers.get("cookie"):
+        headers["Cookie"] = request.headers["cookie"]
+    if request.headers.get("authorization"):
+        headers["Authorization"] = request.headers["authorization"]
+    if not headers:
+        raise HTTPException(401, "برای ادامه وارد حساب مشاور شوید.")
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(
+                settings.auth_internal_url.rstrip("/") + "/mentor/me",
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(503, "سرویس احراز هویت مشاور در دسترس نیست.") from exc
+    if response.status_code == 401:
+        raise HTTPException(401, "نشست مشاور معتبر نیست؛ دوباره وارد شوید.")
+    if response.status_code != 200:
+        raise HTTPException(503, "اعتبارسنجی حساب مشاور انجام نشد.")
+    try:
+        mentor = response.json()
+    except ValueError as exc:
+        raise HTTPException(503, "پاسخ سرویس احراز هویت معتبر نیست.") from exc
+    if (
+        not isinstance(mentor, dict)
+        or not isinstance(mentor.get("id"), int)
+        or not isinstance(mentor.get("mentor_profile_id"), int)
+        or not isinstance(mentor.get("display_name"), str)
+    ):
+        raise HTTPException(503, "اطلاعات حساب مشاور کامل نیست.")
+    return mentor
+
+
+async def fetch_public_person(kind: str, person_id: int) -> dict:
+    resource = "mentors" if kind == "mentorship" else "tutors"
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(
+                settings.people_internal_url.rstrip("/") + f"/{resource}/{person_id}"
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(503, "سرویس پروفایل مدرس یا منتور در دسترس نیست.") from exc
+    if response.status_code == 404:
+        raise HTTPException(404, "پروفایل عمومی مدرس یا منتور پیدا نشد.")
+    if response.status_code != 200:
+        raise HTTPException(503, "بررسی پروفایل مدرس یا منتور انجام نشد.")
+    try:
+        person = response.json()
+    except ValueError as exc:
+        raise HTTPException(503, "پاسخ سرویس پروفایل معتبر نیست.") from exc
+    if (
+        not isinstance(person, dict)
+        or person.get("id") != person_id
+        or person.get("status") != "active"
+        or person.get("is_public") is not True
+        or person.get("field") not in ("physics", "computer")
+    ):
+        raise HTTPException(422, "فقط پروفایل عمومی و فعال همان رشته قابل تخصیص است.")
+    return person
 
 
 def compose_notes(*items: tuple[str, str | None]) -> str | None:
@@ -627,6 +695,7 @@ def student_message_threads(
             {
                 "id": thread.id,
                 "channel": thread.channel,
+                "advisor_assignment_id": thread.advisor_assignment_id,
                 "subject": thread.subject,
                 "status": thread.status,
                 "last_message_at": thread.last_message_at,
@@ -715,7 +784,7 @@ def student_thread_messages(
     )
     now = utcnow()
     for message in messages:
-        if message.sender_type == "admin" and message.read_at is None:
+        if message.sender_type in {"admin", "mentor"} and message.read_at is None:
             message.read_at = now
     db.commit()
     return {"items": [_serialize_message(message) for message in messages], "total": len(messages)}
@@ -767,6 +836,7 @@ def admin_message_threads(
                 "id": thread.id,
                 "student_auth_id": thread.student_auth_id,
                 "student_name": thread.student_name,
+                "channel": thread.channel,
                 "subject": thread.subject,
                 "status": thread.status,
                 "last_message_at": thread.last_message_at,
@@ -796,7 +866,7 @@ def admin_thread_messages(
     )
     now = utcnow()
     for message in messages:
-        if message.sender_type == "student" and message.read_at is None:
+        if message.sender_type in {"student", "mentor"} and message.read_at is None:
             message.read_at = now
     db.commit()
     return {"items": [_serialize_message(message) for message in messages], "total": len(messages)}
@@ -1104,6 +1174,7 @@ def student_schedule(
     return {"items": events, "total": len(events)}
 
 
+
 @app.get("/student/classes")
 def student_classes(
     student: dict = Depends(require_student),
@@ -1112,26 +1183,30 @@ def student_classes(
     profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
     if profile is None:
         return {"items": [], "total": 0}
-    assignments = (
-        db.query(models.TutorAssignment, models.TutoringApplication)
-        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+
+    items = []
+    mentor_rows = (
+        db.query(models.MentorAssignment, models.MentorshipApplication)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
         .filter(
-            models.TutoringApplication.student_id == profile.id,
-            models.TutorAssignment.status == "active",
+            models.MentorshipApplication.student_id == profile.id,
+            models.MentorAssignment.status == "active",
         )
         .all()
     )
-    items = []
-    for assignment, application in assignments:
+    for assignment, application in mentor_rows:
         sessions = (
-            db.query(models.TutorSession)
+            db.query(models.MentorSession)
             .filter_by(assignment_id=assignment.id)
-            .order_by(models.TutorSession.scheduled_at.asc())
+            .order_by(models.MentorSession.scheduled_at.asc(), models.MentorSession.session_number.asc())
             .all()
         )
         items.append({
             "assignment_id": assignment.id,
-            "topic": application.topic,
+            "kind": "mentorship",
+            "title": "منتورینگ اختصاصی",
+            "topic": "همراهی در مسیر " + ("المپیاد فیزیک" if application.field == "physics" else "المپیاد کامپیوتر"),
+            "person_name": assignment.person_name,
             "field": application.field,
             "status": assignment.status,
             "start_date": assignment.start_date,
@@ -1147,4 +1222,792 @@ def student_classes(
                 for session in sessions
             ],
         })
+
+    tutor_rows = (
+        db.query(models.TutorAssignment, models.TutoringApplication)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .filter(
+            models.TutoringApplication.student_id == profile.id,
+            models.TutorAssignment.status == "active",
+        )
+        .all()
+    )
+    for assignment, application in tutor_rows:
+        sessions = (
+            db.query(models.TutorSession)
+            .filter_by(assignment_id=assignment.id)
+            .order_by(models.TutorSession.scheduled_at.asc(), models.TutorSession.session_number.asc())
+            .all()
+        )
+        items.append({
+            "assignment_id": assignment.id,
+            "kind": "tutoring",
+            "title": "کلاس خصوصی",
+            "topic": application.topic,
+            "person_name": assignment.person_name,
+            "field": application.field,
+            "status": assignment.status,
+            "start_date": assignment.start_date,
+            "end_date": assignment.end_date,
+            "sessions": [
+                {
+                    "id": session.id,
+                    "session_number": session.session_number,
+                    "scheduled_at": session.scheduled_at,
+                    "duration_minutes": session.duration_minutes,
+                    "status": session.status,
+                }
+                for session in sessions
+            ],
+        })
+    items.sort(key=lambda item: (item["start_date"], item["assignment_id"]), reverse=True)
     return {"items": items, "total": len(items)}
+
+
+@app.get("/student/messages/advisor")
+def student_advisor_availability(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        return {"available": False, "assignment": None}
+    row = (
+        db.query(models.MentorAssignment, models.MentorshipApplication)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .filter(
+            models.MentorshipApplication.student_id == profile.id,
+            models.MentorAssignment.status == "active",
+        )
+        .order_by(models.MentorAssignment.created_at.desc(), models.MentorAssignment.id.desc())
+        .first()
+    )
+    if row is None:
+        return {"available": False, "assignment": None}
+    assignment, application = row
+    return {
+        "available": True,
+        "assignment": {
+            "id": assignment.id,
+            "mentor_name": assignment.person_name,
+            "field": application.field,
+        },
+    }
+
+
+@app.post("/student/messages/advisor", status_code=201)
+def create_student_advisor_thread(
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        raise HTTPException(409, "برای آغاز گفت‌وگو ابتدا یک درخواست منتورینگ ثبت کن.")
+    row = (
+        db.query(models.MentorAssignment, models.MentorshipApplication)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .filter(
+            models.MentorshipApplication.student_id == profile.id,
+            models.MentorAssignment.status == "active",
+        )
+        .order_by(models.MentorAssignment.created_at.desc(), models.MentorAssignment.id.desc())
+        .first()
+    )
+    if row is None:
+        raise HTTPException(409, "هنوز منتور فعالی به حساب تو اختصاص داده نشده است.")
+    assignment, _application = row
+    subject = ("گفت‌وگو با " + (assignment.person_name or "منتور اختصاصی"))[:140]
+    thread = (
+        db.query(models.StudentMessageThread)
+        .filter_by(
+            student_auth_id=student["id"],
+            channel="advisor",
+            advisor_assignment_id=assignment.id,
+        )
+        .first()
+    )
+    if thread is not None:
+        if thread.status == "closed":
+            thread.status = "open"
+            thread.updated_at = utcnow()
+            db.commit()
+            db.refresh(thread)
+        return {
+            "id": thread.id,
+            "channel": thread.channel,
+            "advisor_assignment_id": thread.advisor_assignment_id,
+            "subject": thread.subject,
+            "status": thread.status,
+            "last_message_at": thread.last_message_at,
+        }
+    thread = models.StudentMessageThread(
+        student_auth_id=student["id"],
+        student_name=(student["first_name"] + " " + student["last_name"])[:180],
+        channel="advisor",
+        advisor_assignment_id=assignment.id,
+        subject=subject,
+        status="open",
+        last_message_at=utcnow(),
+    )
+    db.add(thread)
+    try:
+        db.commit()
+        db.refresh(thread)
+    except IntegrityError:
+        db.rollback()
+        thread = (
+            db.query(models.StudentMessageThread)
+            .filter_by(
+                student_auth_id=student["id"],
+                channel="advisor",
+                advisor_assignment_id=assignment.id,
+            )
+            .first()
+        )
+        if thread is None:
+            raise HTTPException(503, "ساخت گفت‌وگو با مشاور انجام نشد.")
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ساخت گفت‌وگو با مشاور انجام نشد.") from exc
+    return {
+        "id": thread.id,
+        "channel": thread.channel,
+        "advisor_assignment_id": thread.advisor_assignment_id,
+        "subject": thread.subject,
+        "status": thread.status,
+        "last_message_at": thread.last_message_at,
+    }
+
+
+def _mentor_thread_for_user(db: Session, thread_id: int, mentor_profile_id: int):
+    thread = (
+        db.query(models.StudentMessageThread)
+        .join(models.MentorAssignment, models.StudentMessageThread.advisor_assignment_id == models.MentorAssignment.id)
+        .filter(
+            models.StudentMessageThread.id == thread_id,
+            models.StudentMessageThread.channel == "advisor",
+            models.MentorAssignment.mentor_id == mentor_profile_id,
+            models.MentorAssignment.status.in_(("active", "completed")),
+        )
+        .first()
+    )
+    if thread is None:
+        raise HTTPException(404, "گفت‌وگو پیدا نشد.")
+    return thread
+
+
+@app.get("/mentor/messages/threads")
+def mentor_message_threads(
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(models.StudentMessageThread, models.MentorshipApplication)
+        .join(models.MentorAssignment, models.StudentMessageThread.advisor_assignment_id == models.MentorAssignment.id)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .filter(
+            models.MentorAssignment.mentor_id == mentor["mentor_profile_id"],
+            models.MentorAssignment.status.in_(("active", "completed")),
+            models.StudentMessageThread.channel == "advisor",
+        )
+        .order_by(models.StudentMessageThread.last_message_at.desc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": thread.id,
+                "channel": thread.channel,
+                "subject": thread.subject,
+                "student_name": thread.student_name,
+                "status": thread.status,
+                "last_message_at": thread.last_message_at,
+                "unread_count": _unread_count(db, thread.id, "mentor"),
+                "field": application.field,
+            }
+            for thread, application in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.get("/mentor/messages/threads/{thread_id}/messages")
+def mentor_thread_messages(
+    thread_id: int,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    thread = _mentor_thread_for_user(db, thread_id, mentor["mentor_profile_id"])
+    messages = (
+        db.query(models.StudentMessage)
+        .filter_by(thread_id=thread.id)
+        .order_by(models.StudentMessage.created_at.asc(), models.StudentMessage.id.asc())
+        .limit(300)
+        .all()
+    )
+    now = utcnow()
+    for message in messages:
+        if message.sender_type == "student" and message.read_at is None:
+            message.read_at = now
+    db.commit()
+    return {"items": [_serialize_message(message) for message in messages], "total": len(messages)}
+
+
+@app.post("/mentor/messages/threads/{thread_id}/messages", status_code=201)
+def mentor_send_message(
+    thread_id: int,
+    payload: StudentMessageCreate,
+    request: Request,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    thread = _mentor_thread_for_user(db, thread_id, mentor["mentor_profile_id"])
+    assignment = db.get(models.MentorAssignment, thread.advisor_assignment_id)
+    if thread.status != "open" or assignment is None or assignment.status != "active":
+        raise HTTPException(409, "این گفت‌وگو در حال حاضر برای ارسال پیام فعال نیست.")
+    message = models.StudentMessage(
+        thread_id=thread.id,
+        sender_type="mentor",
+        sender_id=mentor["id"],
+        body=payload.body,
+    )
+    thread.last_message_at = utcnow()
+    thread.updated_at = utcnow()
+    db.add(message)
+    try:
+        db.commit()
+        db.refresh(message)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ارسال پیام انجام نشد.") from exc
+    return _serialize_message(message)
+
+
+@app.post("/admin/assignments", status_code=201)
+async def create_assignment(
+    payload: AdminAssignmentCreate,
+    request: Request,
+    admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    require_same_origin(request)
+    if payload.end_date is not None and payload.end_date < payload.start_date:
+        raise HTTPException(422, "تاریخ پایان نمی‌تواند قبل از شروع باشد.")
+    person = await fetch_public_person(payload.kind, payload.person_id)
+    application_model = (
+        models.MentorshipApplication if payload.kind == "mentorship"
+        else models.TutoringApplication
+    )
+    application = db.query(application_model).filter_by(id=payload.application_id).first()
+    if application is None:
+        raise HTTPException(404, "درخواست پیدا نشد.")
+    if application.status in {"rejected", "cancelled", "completed"}:
+        raise HTTPException(409, "برای درخواست بسته‌شده نمی‌توان تخصیص فعال ایجاد کرد.")
+    if application.field != person["field"]:
+        raise HTTPException(422, "رشته منتور یا مدرس با رشته درخواست مطابقت ندارد.")
+
+    assignment_model = (
+        models.MentorAssignment if payload.kind == "mentorship"
+        else models.TutorAssignment
+    )
+    session_model = models.MentorSession if payload.kind == "mentorship" else models.TutorSession
+    if payload.kind == "mentorship":
+        active_person_assignments = db.query(models.MentorAssignment).filter_by(
+            mentor_id=payload.person_id,
+            status="active",
+        ).count()
+    else:
+        active_person_assignments = db.query(models.TutorAssignment).filter_by(
+            tutor_id=payload.person_id,
+            status="active",
+        ).count()
+    if active_person_assignments >= person.get("capacity", 0):
+        raise HTTPException(409, "ظرفیت فعال این منتور یا مدرس تکمیل شده است.")
+    existing = db.query(assignment_model).filter_by(
+        application_id=payload.application_id,
+        status="active",
+    ).first()
+    if existing is not None:
+        raise HTTPException(409, "برای این درخواست از قبل تخصیص فعالی وجود دارد.")
+
+    assignment_values = {
+        "application_id": payload.application_id,
+        "person_name": (person.get("first_name", "") + " " + person.get("last_name", "")).strip()[:180],
+        "start_date": payload.start_date,
+        "end_date": payload.end_date,
+        "status": "active",
+    }
+    if payload.kind == "mentorship":
+        assignment_values["mentor_id"] = payload.person_id
+    else:
+        assignment_values["tutor_id"] = payload.person_id
+    assignment = assignment_model(**assignment_values)
+    db.add(assignment)
+    try:
+        db.flush()
+        for index, session in enumerate(payload.sessions, start=1):
+            scheduled = session.scheduled_at
+            if scheduled.date() < payload.start_date:
+                raise HTTPException(422, "زمان جلسه نمی‌تواند قبل از شروع تخصیص باشد.")
+            if payload.end_date is not None and scheduled.date() > payload.end_date:
+                raise HTTPException(422, "زمان جلسه خارج از بازه تخصیص است.")
+            session_row = session_model(
+                assignment_id=assignment.id,
+                session_number=index,
+                scheduled_at=scheduled,
+                duration_minutes=session.duration_minutes,
+                status="scheduled",
+            )
+            db.add(session_row)
+        application.status = "active"
+        db.commit()
+        db.refresh(assignment)
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "این درخواست هم‌زمان تخصیص فعال دیگری دریافت کرده است.") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ثبت تخصیص و جلسات انجام نشد.") from exc
+
+    return {
+        "id": assignment.id,
+        "kind": payload.kind,
+        "application_id": assignment.application_id,
+        "person_id": payload.person_id,
+        "person_name": assignment.person_name,
+        "start_date": assignment.start_date,
+        "end_date": assignment.end_date,
+        "status": assignment.status,
+        "sessions_count": len(payload.sessions),
+        "created_by": admin["id"],
+    }
+
+
+@app.get("/admin/assignments")
+def admin_assignments(
+    status_filter: str | None = Query(default=None, alias="status", pattern="^(active|completed|cancelled)$"),
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    items = []
+    for assignment, application in (
+        db.query(models.MentorAssignment, models.MentorshipApplication)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .all()
+    ):
+        if status_filter and assignment.status != status_filter:
+            continue
+        items.append({
+            "id": assignment.id,
+            "kind": "mentorship",
+            "application_id": application.id,
+            "student_name": application.student.first_name + " " + application.student.last_name,
+            "student_auth_id": application.student.auth_student_id,
+            "field": application.field,
+            "person_id": assignment.mentor_id,
+            "person_name": assignment.person_name,
+            "start_date": assignment.start_date,
+            "end_date": assignment.end_date,
+            "status": assignment.status,
+        })
+    for assignment, application in (
+        db.query(models.TutorAssignment, models.TutoringApplication)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .all()
+    ):
+        if status_filter and assignment.status != status_filter:
+            continue
+        items.append({
+            "id": assignment.id,
+            "kind": "tutoring",
+            "application_id": application.id,
+            "student_name": application.student.first_name + " " + application.student.last_name,
+            "student_auth_id": application.student.auth_student_id,
+            "field": application.field,
+            "person_id": assignment.tutor_id,
+            "person_name": assignment.person_name,
+            "start_date": assignment.start_date,
+            "end_date": assignment.end_date,
+            "status": assignment.status,
+        })
+    items.sort(key=lambda item: (item["start_date"], item["id"]), reverse=True)
+    return {"items": items, "total": len(items)}
+
+
+@app.patch("/admin/assignments/{kind}/{assignment_id}")
+def update_assignment_status(
+    kind: str,
+    assignment_id: int,
+    payload: AdminAssignmentStatusUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    require_same_origin(request)
+    if kind == "mentorship":
+        assignment = db.get(models.MentorAssignment, assignment_id)
+        application_model = models.MentorshipApplication
+    elif kind == "tutoring":
+        assignment = db.get(models.TutorAssignment, assignment_id)
+        application_model = models.TutoringApplication
+    else:
+        raise HTTPException(404, "تخصیص پیدا نشد.")
+    if assignment is None:
+        raise HTTPException(404, "تخصیص پیدا نشد.")
+    application = db.get(application_model, assignment.application_id)
+    assignment.status = payload.status
+    if application is not None and payload.status == "completed":
+        application.status = "completed"
+    elif application is not None and payload.status == "cancelled":
+        application.status = "cancelled"
+    elif application is not None and payload.status == "active":
+        application.status = "active"
+    assignment.updated_at = utcnow()
+    if kind == "mentorship":
+        advisor_thread = db.query(models.StudentMessageThread).filter_by(
+            advisor_assignment_id=assignment.id
+        ).first()
+        if advisor_thread is not None:
+            advisor_thread.status = "open" if payload.status == "active" else "closed"
+            advisor_thread.updated_at = utcnow()
+    db.commit()
+    return {"id": assignment.id, "kind": kind, "status": assignment.status}
+
+
+
+
+def _mentor_assignment_for_user(db: Session, assignment_id: int, mentor_profile_id: int):
+    assignment = (
+        db.query(models.MentorAssignment)
+        .filter_by(id=assignment_id, mentor_id=mentor_profile_id)
+        .first()
+    )
+    if assignment is None:
+        raise HTTPException(404, "تخصیص منتورینگ پیدا نشد.")
+    return assignment
+
+
+@app.get("/mentor/assignments")
+def mentor_assignments(
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(models.MentorAssignment, models.MentorshipApplication)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .join(models.Student, models.MentorshipApplication.student_id == models.Student.id)
+        .filter(
+            models.MentorAssignment.mentor_id == mentor["mentor_profile_id"],
+            models.MentorAssignment.status.in_(("active", "completed")),
+        )
+        .order_by(models.MentorAssignment.created_at.desc(), models.MentorAssignment.id.desc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": assignment.id,
+                "application_id": application.id,
+                "student_name": application.student.first_name + " " + application.student.last_name,
+                "student_auth_id": application.student.auth_student_id,
+                "grade": application.student.grade,
+                "field": application.field,
+                "status": assignment.status,
+                "start_date": assignment.start_date,
+                "end_date": assignment.end_date,
+                "person_name": assignment.person_name,
+            }
+            for assignment, application in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.get("/mentor/assignments/{assignment_id}/study-reports")
+def mentor_assignment_study_reports(
+    assignment_id: int,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    assignment = _mentor_assignment_for_user(db, assignment_id, mentor["mentor_profile_id"])
+    if assignment.status not in {"active", "completed"}:
+        raise HTTPException(409, "گزارش این تخصیص در دسترس نیست.")
+    application = db.get(models.MentorshipApplication, assignment.application_id)
+    if application is None:
+        raise HTTPException(404, "درخواست منتورینگ پیدا نشد.")
+    student = db.get(models.Student, application.student_id)
+    if student is None or student.auth_student_id is None:
+        return {"items": [], "total": 0}
+    rows = (
+        db.query(models.StudentStudyReport)
+        .filter_by(student_auth_id=student.auth_student_id)
+        .order_by(models.StudentStudyReport.report_date.desc(), models.StudentStudyReport.id.desc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "report_date": row.report_date,
+                "study_minutes": row.study_minutes,
+                "topics": row.topics,
+                "summary": row.summary,
+                "blockers": row.blockers,
+                "next_step": row.next_step,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.get("/mentor/assignments/{assignment_id}/weekly-reports")
+def mentor_assignment_weekly_reports(
+    assignment_id: int,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    assignment = _mentor_assignment_for_user(db, assignment_id, mentor["mentor_profile_id"])
+    rows = (
+        db.query(models.MentorWeeklyReport)
+        .filter_by(assignment_id=assignment.id)
+        .order_by(models.MentorWeeklyReport.week_number.desc(), models.MentorWeeklyReport.id.desc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "week_number": row.week_number,
+                "content": row.content,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.post("/mentor/assignments/{assignment_id}/weekly-reports", status_code=201)
+def create_mentor_weekly_report(
+    assignment_id: int,
+    payload: MentorWeeklyReportCreate,
+    request: Request,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    assignment = _mentor_assignment_for_user(db, assignment_id, mentor["mentor_profile_id"])
+    if assignment.status != "active":
+        raise HTTPException(409, "برای تخصیص غیرفعال نمی‌توان گزارش جدید ثبت کرد.")
+    existing = (
+        db.query(models.MentorWeeklyReport)
+        .filter_by(assignment_id=assignment.id, week_number=payload.week_number)
+        .first()
+    )
+    if existing is not None:
+        raise HTTPException(409, "برای این هفته قبلاً گزارش ثبت شده است.")
+    report = models.MentorWeeklyReport(
+        assignment_id=assignment.id,
+        week_number=payload.week_number,
+        content=payload.content,
+    )
+    db.add(report)
+    try:
+        db.commit()
+        db.refresh(report)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "برای این هفته قبلاً گزارش ثبت شده است.") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ثبت گزارش هفتگی انجام نشد.") from exc
+    return {
+        "id": report.id,
+        "week_number": report.week_number,
+        "content": report.content,
+        "created_at": report.created_at,
+    }
+
+
+@app.get("/student/mentor-reports")
+def student_mentor_reports(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        return {"items": [], "total": 0}
+    rows = (
+        db.query(models.MentorWeeklyReport, models.MentorAssignment)
+        .join(models.MentorAssignment, models.MentorWeeklyReport.assignment_id == models.MentorAssignment.id)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .filter(
+            models.MentorshipApplication.student_id == profile.id,
+            models.MentorAssignment.status.in_(("active", "completed")),
+        )
+        .order_by(models.MentorWeeklyReport.created_at.desc(), models.MentorWeeklyReport.id.desc())
+        .limit(100)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": report.id,
+                "week_number": report.week_number,
+                "content": report.content,
+                "created_at": report.created_at,
+                "mentor_name": assignment.person_name,
+            }
+            for report, assignment in rows
+        ],
+        "total": len(rows),
+    }
+
+
+def _serialize_invoice(invoice: models.StudentInvoice, include_private: bool = False) -> dict:
+    status_value = invoice.status
+    if (
+        status_value == "issued"
+        and invoice.due_date is not None
+        and invoice.due_date < utcnow().date()
+    ):
+        status_value = "overdue"
+    result = {
+        "id": invoice.id,
+        "invoice_number": invoice.invoice_number,
+        "service_type": invoice.service_type,
+        "application_id": invoice.application_id,
+        "title": invoice.title,
+        "description": invoice.description,
+        "amount_toman": invoice.amount_toman,
+        "due_date": invoice.due_date,
+        "status": status_value,
+        "payment_instructions": invoice.payment_instructions,
+        "paid_at": invoice.paid_at,
+        "created_at": invoice.created_at,
+    }
+    if include_private:
+        result["student_auth_id"] = invoice.student_auth_id
+        result["payment_reference"] = invoice.payment_reference
+        result["created_by_admin_id"] = invoice.created_by_admin_id
+    return result
+
+
+@app.get("/student/invoices")
+def student_invoices(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(models.StudentInvoice)
+        .filter_by(student_auth_id=student["id"])
+        .order_by(models.StudentInvoice.created_at.desc(), models.StudentInvoice.id.desc())
+        .all()
+    )
+    return {"items": [_serialize_invoice(row) for row in rows], "total": len(rows)}
+
+
+@app.get("/admin/invoices")
+def admin_invoices(
+    student_auth_id: int | None = Query(default=None, ge=1),
+    invoice_status: str | None = Query(default=None, alias="status", pattern="^(issued|paid|void)$"),
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    query = db.query(models.StudentInvoice)
+    if student_auth_id is not None:
+        query = query.filter_by(student_auth_id=student_auth_id)
+    if invoice_status:
+        query = query.filter_by(status=invoice_status)
+    rows = query.order_by(models.StudentInvoice.created_at.desc(), models.StudentInvoice.id.desc()).limit(300).all()
+    return {"items": [_serialize_invoice(row, include_private=True) for row in rows], "total": len(rows)}
+
+
+@app.post("/admin/invoices", status_code=201)
+def create_invoice(
+    payload: StudentInvoiceCreate,
+    request: Request,
+    admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    require_same_origin(request)
+    student = db.query(models.Student).filter_by(auth_student_id=payload.student_auth_id).first()
+    if student is None:
+        raise HTTPException(404, "پروفایل دانش‌آموز در سامانه درخواست‌ها پیدا نشد.")
+    if payload.application_id is not None:
+        if payload.service_type == "mentorship":
+            linked = db.query(models.MentorshipApplication).filter_by(
+                id=payload.application_id, student_id=student.id
+            ).first()
+        elif payload.service_type == "tutoring":
+            linked = db.query(models.TutoringApplication).filter_by(
+                id=payload.application_id, student_id=student.id
+            ).first()
+        else:
+            linked = None
+        if linked is None:
+            raise HTTPException(422, "درخواست انتخاب‌شده به این دانش‌آموز تعلق ندارد.")
+    elif payload.service_type != "other":
+        raise HTTPException(422, "برای فاکتور منتورینگ یا کلاس، شناسه درخواست لازم است.")
+
+    invoice = models.StudentInvoice(
+        invoice_number="TMP-" + uuid4().hex[:16],
+        student_id=student.id,
+        student_auth_id=payload.student_auth_id,
+        service_type=payload.service_type,
+        application_id=payload.application_id,
+        title=payload.title,
+        description=payload.description,
+        amount_toman=payload.amount_toman,
+        due_date=payload.due_date,
+        payment_instructions=payload.payment_instructions,
+        status="issued",
+        created_by_admin_id=admin["id"],
+    )
+    db.add(invoice)
+    try:
+        db.flush()
+        invoice.invoice_number = f"CH-INV-{invoice.id:06d}"
+        db.commit()
+        db.refresh(invoice)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "صدور فاکتور انجام نشد.") from exc
+    return _serialize_invoice(invoice, include_private=True)
+
+
+@app.patch("/admin/invoices/{invoice_id}")
+def update_invoice_status(
+    invoice_id: int,
+    payload: AdminInvoiceStatusUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    require_same_origin(request)
+    invoice = db.get(models.StudentInvoice, invoice_id)
+    if invoice is None:
+        raise HTTPException(404, "فاکتور پیدا نشد.")
+    if payload.status == "paid":
+        invoice.paid_at = utcnow()
+        invoice.payment_reference = payload.payment_reference
+    else:
+        if payload.payment_reference is not None:
+            raise HTTPException(422, "شناسه پرداخت فقط برای فاکتور پرداخت‌شده قابل ثبت است.")
+        invoice.paid_at = None
+        invoice.payment_reference = None
+    invoice.status = payload.status
+    invoice.updated_at = utcnow()
+    db.commit()
+    db.refresh(invoice)
+    return _serialize_invoice(invoice, include_private=True)

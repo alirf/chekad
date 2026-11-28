@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.db import Base, get_db
-from app.main import app, require_admin
+from app.main import app, require_admin, require_student
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -150,3 +150,110 @@ def test_media_upload_rejects_non_image_files():
         files={"file": ("not-image.txt", b"plain text", "text/plain")},
     )
     assert response.status_code == 415
+
+
+
+def test_student_can_register_cancel_and_re_register_for_matching_exam():
+    app.dependency_overrides[require_admin] = admin
+    app.dependency_overrides[require_student] = lambda: {
+        "id": 41,
+        "field": "physics",
+        "first_name": "آرمان",
+        "last_name": "رضایی",
+    }
+    c = client()
+    created = c.post(
+        "/admin/exams",
+        json={
+            "slug": "physics-qualifier-2027",
+            "title": "آزمون انتخابی فیزیک",
+            "field": "physics",
+            "stage": "مرحله آزمایشی",
+            "starts_at": "2027-01-15T10:00:00+03:30",
+            "duration_minutes": 120,
+            "status": "upcoming",
+        },
+    )
+    assert created.status_code == 201
+    exam_id = created.json()["id"]
+
+    listing = c.get("/student/exams")
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["can_register"] is True
+    assert listing.json()["items"][0]["is_registered"] is False
+
+    registered = c.post(
+        f"/student/exams/{exam_id}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert registered.status_code == 201
+    assert registered.json()["status"] == "registered"
+
+    duplicate = c.post(
+        f"/student/exams/{exam_id}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert duplicate.status_code == 200
+
+    assert c.get("/student/exams").json()["items"][0]["is_registered"] is True
+
+    cancelled = c.delete(
+        f"/student/exams/{exam_id}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+
+    registered_again = c.post(
+        f"/student/exams/{exam_id}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert registered_again.status_code == 201
+    assert c.get("/student/exams").json()["items"][0]["is_registered"] is True
+
+    admin_list = c.get("/admin/exam-registrations?status=registered")
+    assert admin_list.status_code == 200
+    assert admin_list.json()["total"] == 1
+    assert admin_list.json()["items"][0]["student_auth_id"] == 41
+
+
+def test_student_cannot_register_for_another_field_or_closed_exam():
+    app.dependency_overrides[require_admin] = admin
+    app.dependency_overrides[require_student] = lambda: {"id": 41, "field": "physics"}
+    c = client()
+
+    computer = c.post(
+        "/admin/exams",
+        json={"slug": "computer-contest", "title": "Computer Contest", "field": "computer", "status": "upcoming"},
+    ).json()
+    closed = c.post(
+        "/admin/exams",
+        json={"slug": "closed-physics", "title": "Closed Physics", "field": "physics", "status": "closed"},
+    ).json()
+
+    wrong_field = c.post(
+        f"/student/exams/{computer['id']}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert wrong_field.status_code == 403
+
+    closed_response = c.post(
+        f"/student/exams/{closed['id']}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert closed_response.status_code == 409
+
+
+def test_student_exam_registration_requires_authentication_and_same_origin():
+    c = client()
+    assert c.get("/student/exams").status_code == 401
+
+    app.dependency_overrides[require_student] = lambda: {"id": 41, "field": "physics"}
+    app.dependency_overrides[require_admin] = admin
+    exam = c.post(
+        "/admin/exams",
+        json={"slug": "origin-test", "title": "Origin test", "field": "physics", "status": "upcoming"},
+    ).json()
+    forbidden = c.post(f"/student/exams/{exam['id']}/register")
+    assert forbidden.status_code == 403

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     service_port: int = 8000
     db_url: str = ""
     auth_internal_url: str = "http://auth-service:8000"
+    people_internal_url: str = "http://people-service:8000"
     public_applications_enabled: bool = False
     public_site_origin: str = ""
     privacy_contact_email: str = ""

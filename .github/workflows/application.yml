@@ -2,7 +2,7 @@ name: Application API - Phase 1
 
 on:
   push:
-    branches: [main, "feat/phase-1-operational-readiness"]
+    branches: [main, "feat/**"]
     paths:
       - "services/application/**"
       - ".github/workflows/application.yml"

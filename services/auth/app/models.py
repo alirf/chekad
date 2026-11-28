@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, UniqueConstraint
 
 from app.db import Base
 
@@ -36,6 +36,22 @@ class StudentUser(Base):
     guardian_consent_at = Column(DateTime(timezone=True), nullable=False)
     privacy_accepted_at = Column(DateTime(timezone=True), nullable=False)
     phone_verified = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class MentorUser(Base):
+    __tablename__ = "mentor_users"
+    __table_args__ = (
+        UniqueConstraint("mentor_profile_id", name="uq_mentor_users_profile"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    mentor_profile_id = Column(Integer, nullable=False, index=True)
+    phone = Column(String(16), unique=True, nullable=False, index=True)
+    display_name = Column(String(180), nullable=False)
+    password_hash = Column(String(255), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

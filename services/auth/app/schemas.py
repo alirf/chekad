@@ -139,3 +139,67 @@ class StudentServicePublic(BaseModel):
     action_label: str
     availability: Literal["available", "catalog"]
     note: str | None = None
+
+
+
+class MentorLoginRequest(BaseModel):
+    phone: str
+    password: str = Field(min_length=1, max_length=72)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("شماره همراه معتبر نیست")
+        return normalize_iranian_mobile(value)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("رمز عبور معتبر نیست")
+        return value
+
+
+class MentorAccountCreate(BaseModel):
+    mentor_profile_id: int = Field(ge=1)
+    phone: str
+    display_name: str = Field(min_length=2, max_length=180)
+    password: str = Field(min_length=10, max_length=72)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def normalize_phone(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("شماره همراه معتبر نیست")
+        return normalize_iranian_mobile(value)
+
+    @field_validator("display_name")
+    @classmethod
+    def clean_display_name(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 2:
+            raise ValueError("نام نمایشی معتبر نیست")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("رمز عبور نباید بیش از ۷۲ بایت باشد")
+        if value.strip() != value:
+            raise ValueError("رمز عبور نباید با فاصله شروع یا تمام شود")
+        return value
+
+
+class MentorPublic(BaseModel):
+    id: int
+    mentor_profile_id: int
+    phone: str
+    display_name: str
+
+
+class MentorAuthResponse(BaseModel):
+    token_type: str = "cookie"
+    expires_in: int
+    mentor: MentorPublic

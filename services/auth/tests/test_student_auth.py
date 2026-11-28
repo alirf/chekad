@@ -1,11 +1,13 @@
+import bcrypt
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import SessionLocal
 from app.main import app
-from app.models import StudentUser
-from app.security import STUDENT_COOKIE_NAME
+from app.models import MentorUser, StudentUser
+from app.security import MENTOR_COOKIE_NAME, STUDENT_COOKIE_NAME
 
 
 def register_payload(**overrides):
@@ -107,3 +109,66 @@ def test_registration_can_be_disabled_by_configuration(monkeypatch):
         response = client.post("/student/register", json=register_payload())
 
     assert response.status_code == 503
+
+
+
+def test_mentor_login_has_separate_cookie_audience_and_profile_identity():
+    password = "MentorStrong!234"
+    with SessionLocal() as db:
+        mentor = MentorUser(
+            mentor_profile_id=73,
+            phone="09125554433",
+            display_name="منتور آزمایشی",
+            password_hash=bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
+            is_active=True,
+        )
+        db.add(mentor)
+        db.commit()
+
+    with TestClient(app) as client:
+        wrong = client.post(
+            "/mentor/login",
+            json={"phone": "09125554433", "password": "WrongPassword!"},
+        )
+        assert wrong.status_code == 401
+
+        login = client.post(
+            "/mentor/login",
+            json={"phone": "۰۹۱۲۵۵۵۴۴۳۳", "password": password},
+        )
+        assert login.status_code == 200
+        assert MENTOR_COOKIE_NAME in login.cookies
+        assert login.json()["mentor"]["mentor_profile_id"] == 73
+
+        profile = client.get("/mentor/me")
+        assert profile.status_code == 200
+        assert profile.json()["display_name"] == "منتور آزمایشی"
+        assert profile.json()["mentor_profile_id"] == 73
+
+        # A mentor session is not an administrator or a student session.
+        assert client.get("/me").status_code == 401
+        assert client.get("/student/me").status_code == 401
+
+        logout = client.post("/mentor/logout")
+        assert logout.status_code == 200
+        assert client.get("/mentor/me").status_code == 401
+
+
+def test_inactive_mentor_cannot_authenticate():
+    password = "MentorStrong!234"
+    with SessionLocal() as db:
+        db.add(MentorUser(
+            mentor_profile_id=74,
+            phone="09125554434",
+            display_name="منتور غیرفعال",
+            password_hash=bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
+            is_active=False,
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/mentor/login",
+            json={"phone": "09125554434", "password": password},
+        )
+        assert response.status_code == 401

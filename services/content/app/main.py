@@ -7,10 +7,11 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -347,3 +348,215 @@ def delete_exam(exam_id: int, db: Session = Depends(get_db), _: dict = Depends(r
         raise HTTPException(404, "exam not found")
     db.delete(row); db.commit()
     return {"deleted": True}
+
+
+async def require_student(request: Request) -> dict:
+    headers = {}
+    if request.headers.get("cookie"):
+        headers["Cookie"] = request.headers["cookie"]
+    if request.headers.get("authorization"):
+        headers["Authorization"] = request.headers["authorization"]
+    if not headers:
+        raise HTTPException(401, "برای استفاده از آزمون‌ها وارد حساب دانش‌آموزی شوید.")
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(
+                settings.auth_internal_url.rstrip("/") + "/student/me",
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(503, "سرویس احراز هویت در دسترس نیست.") from exc
+    if response.status_code == 401:
+        raise HTTPException(401, "نشست دانش‌آموزی معتبر نیست؛ دوباره وارد شوید.")
+    if response.status_code != 200:
+        raise HTTPException(503, "اعتبارسنجی حساب دانش‌آموزی انجام نشد.")
+    try:
+        student = response.json()
+    except ValueError as exc:
+        raise HTTPException(503, "پاسخ سرویس احراز هویت معتبر نیست.") from exc
+    if (
+        not isinstance(student, dict)
+        or not isinstance(student.get("id"), int)
+        or student.get("field") not in {"physics", "computer"}
+    ):
+        raise HTTPException(503, "اطلاعات حساب دانش‌آموزی کامل نیست.")
+    return student
+
+
+def require_content_same_origin(request: Request) -> None:
+    origin = request.headers.get("origin")
+    parsed = urlsplit(origin or "")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.path not in ("", "/")
+        or parsed.query or parsed.fragment
+        or parsed.username or parsed.password
+        or f"{parsed.scheme}://{parsed.netloc}".lower() != f"{scheme}://{host}".lower()
+    ):
+        raise HTTPException(403, "درخواست باید از همان وب‌سایت چکاد ارسال شود.")
+
+
+def student_exam_dict(exam, registration):
+    return {
+        **exam_dict(exam),
+        "registration_status": registration.status if registration else None,
+        "is_registered": bool(registration and registration.status == "registered"),
+        "can_register": exam.status in {"published", "upcoming"},
+        "registered_at": registration.registered_at if registration and registration.status == "registered" else None,
+    }
+
+
+@app.get("/student/exams")
+def student_exams(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    exams = (
+        db.query(models.Exam)
+        .filter(
+            models.Exam.field == student["field"],
+            models.Exam.status.in_(("published", "upcoming", "closed", "completed")),
+        )
+        .order_by(models.Exam.id.desc())
+        .all()
+    )
+    registrations = {
+        row.exam_id: row
+        for row in db.query(models.ExamRegistration)
+        .filter_by(student_auth_id=student["id"])
+        .all()
+    }
+    return {
+        "items": [student_exam_dict(exam, registrations.get(exam.id)) for exam in exams],
+        "total": len(exams),
+    }
+
+
+@app.post("/student/exams/{exam_id}/register", status_code=201)
+def register_student_for_exam(
+    exam_id: int,
+    request: Request,
+    response: Response,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_content_same_origin(request)
+    exam = db.get(models.Exam, exam_id)
+    if exam is None or exam.status == "draft":
+        raise HTTPException(404, "آزمون پیدا نشد.")
+    if exam.field != student["field"]:
+        raise HTTPException(403, "این آزمون برای رشته المپیاد حساب تو نیست.")
+    if exam.status not in {"published", "upcoming"}:
+        raise HTTPException(409, "مهلت ثبت‌نام این آزمون فعال نیست.")
+
+    registration = (
+        db.query(models.ExamRegistration)
+        .filter_by(exam_id=exam.id, student_auth_id=student["id"])
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if registration is None:
+        registration = models.ExamRegistration(
+            exam_id=exam.id,
+            student_auth_id=student["id"],
+            status="registered",
+            registered_at=now,
+        )
+        db.add(registration)
+    elif registration.status == "registered":
+        response.status_code = 200
+        return {
+            "id": registration.id,
+            "exam_id": exam.id,
+            "status": registration.status,
+            "registered_at": registration.registered_at,
+        }
+    else:
+        registration.status = "registered"
+        registration.registered_at = now
+        registration.cancelled_at = None
+        registration.updated_at = now
+
+    try:
+        db.commit()
+        db.refresh(registration)
+    except IntegrityError as exc:
+        db.rollback()
+        existing = (
+            db.query(models.ExamRegistration)
+            .filter_by(exam_id=exam.id, student_auth_id=student["id"], status="registered")
+            .first()
+        )
+        if existing is not None:
+            response.status_code = 200
+            registration = existing
+        else:
+            raise HTTPException(503, "ثبت‌نام در آزمون انجام نشد.") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ثبت‌نام در آزمون انجام نشد.") from exc
+    return {
+        "id": registration.id,
+        "exam_id": exam.id,
+        "status": registration.status,
+        "registered_at": registration.registered_at,
+    }
+
+
+@app.delete("/student/exams/{exam_id}/register")
+def cancel_student_exam_registration(
+    exam_id: int,
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_content_same_origin(request)
+    registration = (
+        db.query(models.ExamRegistration)
+        .filter_by(exam_id=exam_id, student_auth_id=student["id"], status="registered")
+        .first()
+    )
+    if registration is None:
+        raise HTTPException(404, "ثبت‌نام فعالی برای این آزمون پیدا نشد.")
+    now = datetime.now(timezone.utc)
+    registration.status = "cancelled"
+    registration.cancelled_at = now
+    registration.updated_at = now
+    db.commit()
+    return {"exam_id": exam_id, "status": "cancelled"}
+
+
+@app.get("/admin/exam-registrations")
+def admin_exam_registrations(
+    exam_id: int | None = None,
+    registration_status: str | None = Query(default=None, alias="status", pattern="^(registered|cancelled)$"),
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    query = db.query(models.ExamRegistration, models.Exam).join(
+        models.Exam, models.ExamRegistration.exam_id == models.Exam.id
+    )
+    if exam_id is not None:
+        query = query.filter(models.ExamRegistration.exam_id == exam_id)
+    if registration_status:
+        query = query.filter(models.ExamRegistration.status == registration_status)
+    rows = query.order_by(models.ExamRegistration.registered_at.desc()).limit(500).all()
+    return {
+        "items": [
+            {
+                "id": registration.id,
+                "exam_id": exam.id,
+                "exam_title": exam.title,
+                "field": exam.field,
+                "student_auth_id": registration.student_auth_id,
+                "status": registration.status,
+                "registered_at": registration.registered_at,
+                "cancelled_at": registration.cancelled_at,
+            }
+            for registration, exam in rows
+        ],
+        "total": len(rows),
+    }

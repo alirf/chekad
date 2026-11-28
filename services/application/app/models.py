@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint,
+    BigInteger, Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.orm import relationship
 
@@ -71,10 +71,20 @@ class MentorshipApplication(Base):
 
 class MentorAssignment(Base):
     __tablename__ = "mentor_assignments"
+    __table_args__ = (
+        Index(
+            "uq_mentor_assignments_active_application",
+            "application_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     application_id = Column(Integer, ForeignKey("mentorship_applications.id", ondelete="CASCADE"), nullable=False, index=True)
     mentor_id = Column(Integer, nullable=False, index=True)  # cross-service → people-service
+    person_name = Column(String(180), nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date)
     status = Column(String(20), default="active", nullable=False)
@@ -99,6 +109,9 @@ class MentorSession(Base):
 
 class MentorWeeklyReport(Base):
     __tablename__ = "mentor_weekly_reports"
+    __table_args__ = (
+        UniqueConstraint("assignment_id", "week_number", name="uq_mentor_weekly_reports_assignment_week"),
+    )
 
     id = Column(Integer, primary_key=True)
     assignment_id = Column(Integer, ForeignKey("mentor_assignments.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -131,6 +144,15 @@ class TutoringApplication(Base):
 
 class TutorAssignment(Base):
     __tablename__ = "tutor_assignments"
+    __table_args__ = (
+        Index(
+            "uq_tutor_assignments_active_application",
+            "application_id",
+            unique=True,
+            sqlite_where=text("status = 'active'"),
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     application_id = Column(Integer, ForeignKey("tutoring_applications.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -171,13 +193,27 @@ class InternalNote(Base):
 class StudentMessageThread(Base):
     __tablename__ = "student_message_threads"
     __table_args__ = (
-        UniqueConstraint("student_auth_id", "channel", name="uq_student_message_thread_student_channel"),
+        Index(
+            "uq_student_message_threads_support_student",
+            "student_auth_id",
+            unique=True,
+            sqlite_where=text("channel = 'support'"),
+            postgresql_where=text("channel = 'support'"),
+        ),
+        Index(
+            "uq_student_message_threads_advisor_assignment",
+            "advisor_assignment_id",
+            unique=True,
+            sqlite_where=text("advisor_assignment_id IS NOT NULL"),
+            postgresql_where=text("advisor_assignment_id IS NOT NULL"),
+        ),
     )
 
     id = Column(Integer, primary_key=True)
     student_auth_id = Column(Integer, nullable=False, index=True)
     student_name = Column(String(180), nullable=False)
     channel = Column(String(20), nullable=False, default="support")
+    advisor_assignment_id = Column(Integer, ForeignKey("mentor_assignments.id", ondelete="CASCADE"), nullable=True, index=True)
     subject = Column(String(140), nullable=False, default="گفت‌وگو با پشتیبانی چکاد")
     status = Column(String(20), nullable=False, default="open", index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -190,7 +226,7 @@ class StudentMessage(Base):
 
     id = Column(Integer, primary_key=True)
     thread_id = Column(Integer, ForeignKey("student_message_threads.id", ondelete="CASCADE"), nullable=False, index=True)
-    sender_type = Column(String(16), nullable=False)  # student|admin
+    sender_type = Column(String(16), nullable=False)  # student|admin|mentor
     sender_id = Column(Integer, nullable=False)
     body = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -223,3 +259,28 @@ class StudentStudyTask(Base):
     status = Column(String(20), nullable=False, default="pending", index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+
+class StudentInvoice(Base):
+    __tablename__ = "student_invoices"
+
+    id = Column(Integer, primary_key=True)
+    invoice_number = Column(String(32), unique=True, nullable=False, index=True)
+    student_id = Column(Integer, ForeignKey("students.id", ondelete="RESTRICT"), nullable=False, index=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    service_type = Column(String(20), nullable=False, default="other")
+    application_id = Column(Integer, nullable=True)
+    title = Column(String(180), nullable=False)
+    description = Column(Text)
+    amount_toman = Column(BigInteger, nullable=False)
+    due_date = Column(Date)
+    payment_instructions = Column(Text)
+    status = Column(String(20), nullable=False, default="issued", index=True)
+    paid_at = Column(DateTime(timezone=True))
+    payment_reference = Column(String(120))
+    created_by_admin_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+    student = relationship("Student")

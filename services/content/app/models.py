@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 
 from app.db import Base
 
@@ -62,4 +62,21 @@ class Exam(Base):
     registration_url = Column(String(1000))
     status = Column(String(20), default="draft", nullable=False, index=True)
     cover_image_url = Column(String(1000))
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+
+class ExamRegistration(Base):
+    __tablename__ = "exam_registrations"
+    __table_args__ = (
+        UniqueConstraint("exam_id", "student_auth_id", name="uq_exam_registration_student"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    exam_id = Column(Integer, ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, index=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="registered", index=True)
+    registered_at = Column(DateTime(timezone=True), nullable=False)
+    cancelled_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

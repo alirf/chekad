@@ -7,13 +7,14 @@ type Thread = {
   student_auth_id: number;
   student_name: string;
   subject: string;
+  channel: "support" | "advisor";
   status: "open" | "closed";
   last_message_at: string;
   unread_count: number;
 };
 type Message = {
   id: number;
-  sender_type: "student" | "admin";
+  sender_type: "student" | "admin" | "mentor";
   sender_id: number;
   body: string;
   created_at: string;
@@ -139,7 +140,7 @@ export default function AdminMessagesPage() {
             {loading ? <p className="p-5 text-center text-xs text-slate-400">در حال بارگذاری...</p> : threads.map((thread) => (
               <button key={thread.id} type="button" onClick={() => setSelectedId(thread.id)} className={"flex w-full items-center gap-3 rounded-xl p-3 text-right transition " + (selectedId === thread.id ? "bg-blue-50" : "hover:bg-slate-50")}>
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-100 font-black text-blue-700">{thread.student_name.slice(0, 1)}</span>
-                <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-800">{thread.student_name}</strong><small className="mt-1 block truncate text-[10px] text-slate-400">{thread.subject}</small><small className="block text-[9px] text-slate-400">{dateTime(thread.last_message_at)}</small></span>
+                <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-800">{thread.student_name}</strong><small className="mt-1 block truncate text-[10px] text-slate-400">{thread.channel === "advisor" ? "مشاور اختصاصی · " : "پشتیبانی · "}{thread.subject}</small><small className="block text-[9px] text-slate-400">{dateTime(thread.last_message_at)}</small></span>
                 {thread.unread_count > 0 && <b className="grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[9px] text-white">{thread.unread_count}</b>}
               </button>
             ))}
@@ -150,11 +151,12 @@ export default function AdminMessagesPage() {
           {selected ? (
             <>
               <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4">
-                <div><strong className="text-sm text-slate-800">{selected.student_name}</strong><p className="mt-1 text-[10px] text-slate-400">شناسه حساب دانش‌آموزی: {selected.student_auth_id} · {selected.subject}</p></div>
+                <div><strong className="text-sm text-slate-800">{selected.student_name}</strong><p className="mt-1 text-[10px] text-slate-400">شناسه حساب دانش‌آموزی: {selected.student_auth_id} · {selected.channel === "advisor" ? "گفت‌وگو با مشاور" : "پشتیبانی"} · {selected.subject}</p></div>
                 <button type="button" onClick={() => updateStatus(selected.status === "open" ? "closed" : "open")} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:bg-slate-50">{selected.status === "open" ? "بستن گفت‌وگو" : "بازکردن گفت‌وگو"}</button>
               </header>
               <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">
-                {messages.map((message) => <article key={message.id} className={"max-w-[82%] rounded-xl border px-4 py-3 shadow-sm " + (message.sender_type === "admin" ? "mr-auto border-blue-100 bg-blue-50" : "ml-auto border-slate-200 bg-white")}>
+                {messages.map((message) => <article key={message.id} className={"max-w-[82%] rounded-xl border px-4 py-3 shadow-sm " + (message.sender_type === "admin" ? "mr-auto border-blue-100 bg-blue-50" : message.sender_type === "mentor" ? "mr-auto border-emerald-100 bg-emerald-50" : "ml-auto border-slate-200 bg-white")}>
+                  {message.sender_type !== "student" && <small className="mb-1 block text-[9px] font-bold text-slate-500">{message.sender_type === "mentor" ? "منتور اختصاصی" : "ادمین چکاد"}</small>}
                   <p className="whitespace-pre-wrap break-words text-xs leading-7 text-slate-700">{message.body}</p>
                   <time className="mt-2 block text-left text-[9px] text-slate-400">{dateTime(message.created_at)}</time>
                 </article>)}

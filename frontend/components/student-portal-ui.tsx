@@ -53,6 +53,14 @@ export function PortalStatus({ status }: { status: string }) {
     active: "فعال",
     cancelled: "لغوشده",
     completed_session: "برگزارشده",
+    issued: "صادرشده",
+    overdue: "سررسیدگذشته",
+    paid: "پرداخت‌شده",
+    void: "باطل‌شده",
+    published: "منتشرشده",
+    upcoming: "پیش رو",
+    closed: "بسته",
+
   };
   return <span className={"student-portal-status status-" + status}>{labels[status] || status}</span>;
 }

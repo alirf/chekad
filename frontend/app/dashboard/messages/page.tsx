@@ -3,6 +3,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   createStudentMessageThread,
+  createStudentAdvisorThread,
+  checkStudentAdvisorAvailability,
   fetchStudentMessageThreads,
   fetchStudentThreadMessages,
   sendStudentMessage,
@@ -22,6 +24,9 @@ export default function StudentMessagesPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [advisorAvailable, setAdvisorAvailable] = useState(false);
+  const [advisorName, setAdvisorName] = useState("");
+  const [advisorChecking, setAdvisorChecking] = useState(true);
 
   const selected = useMemo(() => threads.find((thread) => thread.id === selectedId) || null, [threads, selectedId]);
 
@@ -39,6 +44,14 @@ export default function StudentMessagesPage() {
 
   useEffect(() => {
     let active = true;
+    checkStudentAdvisorAvailability()
+      .then((result) => {
+        if (!active) return;
+        setAdvisorAvailable(result.available);
+        setAdvisorName(result.assignment?.mentor_name || "مشاور اختصاصی");
+      })
+      .catch(() => undefined)
+      .finally(() => { if (active) setAdvisorChecking(false); });
     fetchStudentMessageThreads()
       .then((result) => {
         if (!active) return;
@@ -80,6 +93,20 @@ export default function StudentMessagesPage() {
     finally { setCreating(false); }
   }
 
+  async function startAdvisorConversation() {
+    setCreating(true); setError(""); setNotice("");
+    try {
+      const thread = await createStudentAdvisorThread();
+      await loadThreads();
+      setSelectedId(thread.id);
+      setNotice("گفت‌وگو با مشاور اختصاصی آماده است.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "ساخت گفت‌وگو با مشاور انجام نشد.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function submitMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected || !draft.trim()) return;
@@ -112,7 +139,10 @@ export default function StudentMessagesPage() {
             {!threads.length && !loading && <p className="student-messenger-no-threads">هنوز گفت‌وگویی شروع نشده است.</p>}
           </div>
           <div className="student-messenger-new">
-            <label htmlFor="support-subject">موضوع گفت‌وگو</label>
+            <button type="button" className="student-portal-button secondary full" onClick={startAdvisorConversation} disabled={creating || advisorChecking || !advisorAvailable}>
+              {advisorChecking ? "بررسی دسترسی مشاور..." : creating ? "در حال آماده‌سازی..." : advisorAvailable ? "پیام به " + advisorName : "گفت‌وگوی مشاور پس از تخصیص فعال می‌شود"}
+            </button>
+            <label htmlFor="support-subject">موضوع گفت‌وگو با پشتیبانی</label>
             <input id="support-subject" value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={140} />
             <button type="button" className="student-portal-button primary full" onClick={startConversation} disabled={creating || subject.trim().length < 3}>
               {creating ? "در حال آماده‌سازی..." : threads.length ? "باز کردن گفت‌وگوی پشتیبانی" : "شروع گفت‌وگوی جدید"}
@@ -125,12 +155,13 @@ export default function StudentMessagesPage() {
             <>
               <header className="student-messenger-chat-header">
                 <span className="student-messenger-contact-avatar">چ</span>
-                <div><strong>{selected.subject}</strong><small>{selected.status === "open" ? "گفت‌وگوی فعال با پشتیبانی چکاد" : "گفت‌وگوی بسته‌شده"}</small></div>
-                <span className="student-messenger-online"><i /> پشتیبانی چکاد</span>
+                <div><strong>{selected.subject}</strong><small>{selected.channel === "advisor" ? "گفت‌وگوی مستقیم با مشاور اختصاصی" : "گفت‌وگو با پشتیبانی چکاد"} · {selected.status === "open" ? "فعال" : "بسته‌شده"}</small></div>
+                <span className="student-messenger-online"><i /> {selected.channel === "advisor" ? "مشاور اختصاصی" : "پشتیبانی چکاد"}</span>
               </header>
               <div className="student-messenger-messages">
                 {messages.map((message) => (
-                  <article key={message.id} className={"student-message-bubble " + (message.sender_type === "student" ? "from-student" : "from-admin")}>
+                  <article key={message.id} className={"student-message-bubble " + (message.sender_type === "student" ? "from-student" : message.sender_type === "mentor" ? "from-mentor" : "from-admin")}>
+                    {message.sender_type !== "student" && <small className="student-message-sender">{message.sender_type === "mentor" ? advisorName || "مشاور اختصاصی" : "پشتیبانی چکاد"}</small>}
                     <p>{message.body}</p>
                     <time>{formatPortalDateTime(message.created_at)}{message.sender_type === "student" && message.read_at ? " · دیده‌شده" : ""}</time>
                   </article>
@@ -154,8 +185,8 @@ export default function StudentMessagesPage() {
 
       <section className="student-advisor-message-card">
         <span className="student-advisor-message-icon">◎</span>
-        <div><strong>گفت‌وگو با مشاور اختصاصی</strong><p>این بخش پس از انتساب مشاور و فعال‌شدن حساب امن مشاور در سامانه باز می‌شود. در حال حاضر پیام‌رسان فعال، گفت‌وگوی دانش‌آموز با پشتیبانی چکاد است.</p></div>
-        <span className="student-portal-status status-pending">در انتظار فعال‌سازی</span>
+        <div><strong>گفت‌وگو با مشاور اختصاصی</strong><p>{advisorAvailable ? "مشاور اختصاصی به حساب تو متصل است. می‌توانی از دکمه بالای فهرست گفت‌وگوها پیام بدهی." : "پس از تخصیص منتور و فعال‌سازی حساب او، گفت‌وگوی اختصاصی به‌صورت خودکار در دسترس قرار می‌گیرد."}</p></div>
+        <span className={"student-portal-status " + (advisorAvailable ? "status-active" : "status-pending")}>{advisorAvailable ? "فعال" : "در انتظار تخصیص"}</span>
       </section>
     </div>
   );

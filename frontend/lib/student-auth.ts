@@ -129,6 +129,7 @@ export async function logoutStudent() {
 export interface PortalMessageThread {
   id: number;
   channel: "support" | "advisor";
+  advisor_assignment_id?: number | null;
   subject: string;
   status: "open" | "closed";
   last_message_at: string;
@@ -136,7 +137,7 @@ export interface PortalMessageThread {
 }
 export interface PortalMessage {
   id: number;
-  sender_type: "student" | "admin";
+  sender_type: "student" | "admin" | "mentor";
   sender_id: number;
   body: string;
   created_at: string;
@@ -172,7 +173,10 @@ export interface StudentScheduleEvent {
 }
 export interface StudentClassRecord {
   assignment_id: number;
+  kind: "mentorship" | "tutoring";
+  title: string;
   topic: string;
+  person_name?: string | null;
   field: OlympiadField;
   status: string;
   start_date: string;
@@ -246,4 +250,45 @@ export async function fetchStudentSchedule() {
 }
 export async function fetchStudentClasses() {
   return requestJson<{ items: StudentClassRecord[]; total: number }>("/application/student/classes");
+}
+
+
+export interface StudentInvoice {
+  id: number;
+  invoice_number: string;
+  service_type: "mentorship" | "tutoring" | "other";
+  application_id?: number | null;
+  title: string;
+  description?: string | null;
+  amount_toman: number;
+  due_date?: string | null;
+  status: "issued" | "paid" | "void" | "overdue";
+  payment_instructions?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+}
+
+export async function checkStudentAdvisorAvailability() {
+  return requestJson<{
+    available: boolean;
+    assignment: { id: number; mentor_name?: string | null; field: OlympiadField } | null;
+  }>("/application/student/messages/advisor");
+}
+export async function createStudentAdvisorThread() {
+  return requestJson<PortalMessageThread>("/application/student/messages/advisor", { method: "POST" });
+}
+export async function fetchStudentInvoices() {
+  return requestJson<{ items: StudentInvoice[]; total: number }>("/application/student/invoices");
+}
+
+
+export interface StudentMentorReport {
+  id: number;
+  week_number: number;
+  content: string;
+  created_at: string;
+  mentor_name?: string | null;
+}
+export async function fetchStudentMentorReports() {
+  return requestJson<{ items: StudentMentorReport[]; total: number }>("/application/student/mentor-reports");
 }

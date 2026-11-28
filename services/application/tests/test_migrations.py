@@ -37,4 +37,16 @@ def test_initial_and_privacy_migrations_upgrade_cleanly(tmp_path, monkeypatch):
     assert tutoring_columns["request_fingerprint"]["nullable"] is True
     assert any(index["name"] == "ix_students_auth_student_id" and index["unique"] for index in inspector.get_indexes("students"))
 
+    thread_columns = {item["name"]: item for item in inspector.get_columns("student_message_threads")}
+    invoice_columns = {item["name"]: item for item in inspector.get_columns("student_invoices")}
+    assert thread_columns["advisor_assignment_id"]["nullable"] is True
+    assert invoice_columns["amount_toman"]["nullable"] is False
+    assert invoice_columns["student_auth_id"]["nullable"] is False
+    assert any(index["name"] == "uq_student_message_threads_support_student" and index["unique"] for index in inspector.get_indexes("student_message_threads"))
+    assert any(index["name"] == "uq_student_message_threads_advisor_assignment" and index["unique"] for index in inspector.get_indexes("student_message_threads"))
+    weekly_constraints = inspector.get_unique_constraints("mentor_weekly_reports")
+    assert any(constraint["name"] == "uq_mentor_weekly_reports_assignment_week" for constraint in weekly_constraints)
+    assert any(index["name"] == "uq_mentor_assignments_active_application" and index["unique"] for index in inspector.get_indexes("mentor_assignments"))
+    assert any(index["name"] == "uq_tutor_assignments_active_application" and index["unique"] for index in inspector.get_indexes("tutor_assignments"))
+
     engine.dispose()

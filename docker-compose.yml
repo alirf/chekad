@@ -118,6 +118,7 @@ services:
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       STUDENT_REGISTRATION_ENABLED: ${STUDENT_REGISTRATION_ENABLED:-false}
       APP_ENV: ${APP_ENV:-development}
+      PEOPLE_INTERNAL_URL: http://people-service:8000
     depends_on:
       migrate-auth:
         condition: service_completed_successfully
@@ -139,6 +140,7 @@ services:
       SERVICE_NAME: application-service
       SERVICE_PORT: 8000
       AUTH_INTERNAL_URL: http://auth-service:8000
+      PEOPLE_INTERNAL_URL: http://people-service:8000
       DB_URL: postgresql+psycopg2://${APP_DB_USER:-chekad_application_app}:${APP_DB_PASSWORD}@postgres:5432/${APP_DB_NAME:-chekad_application}
       PUBLIC_APPLICATIONS_ENABLED: ${PUBLIC_APPLICATIONS_ENABLED:-false}
       PUBLIC_SITE_ORIGIN: ${PUBLIC_SITE_ORIGIN:-}
@@ -148,6 +150,8 @@ services:
       migrate-application:
         condition: service_completed_successfully
       auth-service:
+        condition: service_healthy
+      people-service:
         condition: service_healthy
     networks: [chekad]
     expose: ["8000"]

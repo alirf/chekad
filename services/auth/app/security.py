@@ -4,11 +4,12 @@ from typing import Any
 import jwt
 
 from app.config import settings
-from app.models import AdminUser, StudentUser
+from app.models import AdminUser, MentorUser, StudentUser
 
 ALGORITHM = "HS256"
 COOKIE_NAME = "chekad_access_token"
 STUDENT_COOKIE_NAME = "chekad_student_token"
+MENTOR_COOKIE_NAME = "chekad_mentor_token"
 
 
 def _encode_token(payload: dict[str, Any]) -> str:
@@ -70,4 +71,34 @@ def decode_student_access_token(token: str) -> dict[str, Any]:
     )
     if payload.get("role") != "student":
         raise jwt.InvalidTokenError("Invalid student role")
+    return payload
+
+
+
+def create_mentor_access_token(mentor: MentorUser) -> tuple[str, int]:
+    now = datetime.now(timezone.utc)
+    expires_in = settings.jwt_expire_minutes * 60
+    payload: dict[str, Any] = {
+        "sub": str(mentor.id),
+        "mentor_profile_id": mentor.mentor_profile_id,
+        "role": "mentor",
+        "iat": now,
+        "exp": now + timedelta(seconds=expires_in),
+        "iss": settings.jwt_issuer,
+        "aud": "chekad-mentor",
+    }
+    return _encode_token(payload), expires_in
+
+
+def decode_mentor_access_token(token: str) -> dict[str, Any]:
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret.get_secret_value(),
+        algorithms=[ALGORITHM],
+        issuer=settings.jwt_issuer,
+        audience="chekad-mentor",
+        options={"require": ["sub", "iat", "exp", "iss", "aud"]},
+    )
+    if payload.get("role") != "mentor":
+        raise jwt.InvalidTokenError("Invalid mentor role")
     return payload

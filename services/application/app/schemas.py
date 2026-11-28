@@ -181,3 +181,91 @@ class StudentStudyTaskUpdate(BaseModel):
         if len(value) < 2:
             raise ValueError("عنوان فعالیت معتبر نیست.")
         return value
+
+
+
+class AssignmentSessionInput(BaseModel):
+    scheduled_at: datetime
+    duration_minutes: int = Field(default=20, ge=10, le=360)
+
+    @field_validator("scheduled_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("زمان جلسه باید همراه منطقه زمانی ارسال شود.")
+        return value
+
+
+class AdminAssignmentCreate(BaseModel):
+    kind: Literal["mentorship", "tutoring"]
+    application_id: int = Field(ge=1)
+    person_id: int = Field(ge=1)
+    start_date: date
+    end_date: date | None = None
+    sessions: list[AssignmentSessionInput] = Field(default_factory=list, max_length=24)
+
+    @field_validator("end_date")
+    @classmethod
+    def validate_end_date(cls, value: date | None, info):
+        start = info.data.get("start_date")
+        if value is not None and start is not None and value < start:
+            raise ValueError("تاریخ پایان نمی‌تواند قبل از شروع باشد.")
+        return value
+
+
+class AdminAssignmentStatusUpdate(BaseModel):
+    status: Literal["active", "completed", "cancelled"]
+
+
+class StudentInvoiceCreate(BaseModel):
+    student_auth_id: int = Field(ge=1)
+    service_type: Literal["mentorship", "tutoring", "other"] = "other"
+    application_id: int | None = Field(default=None, ge=1)
+    title: str = Field(min_length=3, max_length=180)
+    description: str | None = Field(default=None, max_length=2000)
+    amount_toman: int = Field(ge=1, le=1_000_000_000_000)
+    due_date: date | None = None
+    payment_instructions: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("title")
+    @classmethod
+    def clean_invoice_title(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 3:
+            raise ValueError("عنوان فاکتور معتبر نیست.")
+        return value
+
+    @field_validator("description", "payment_instructions")
+    @classmethod
+    def clean_optional_invoice_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+class AdminInvoiceStatusUpdate(BaseModel):
+    status: Literal["issued", "paid", "void"]
+    payment_reference: str | None = Field(default=None, max_length=120)
+
+    @field_validator("payment_reference")
+    @classmethod
+    def clean_payment_reference(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+
+class MentorWeeklyReportCreate(BaseModel):
+    week_number: int = Field(ge=1, le=52)
+    content: str = Field(min_length=10, max_length=5000)
+
+    @field_validator("content")
+    @classmethod
+    def clean_weekly_report(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 10:
+            raise ValueError("گزارش هفتگی باید حداقل ۱۰ نویسه داشته باشد.")
+        return value

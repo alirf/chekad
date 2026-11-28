@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { createStudentReport, fetchStudentReports, type StudentStudyReport } from "../../../lib/student-auth";
+import { createStudentReport, fetchStudentMentorReports, fetchStudentReports, type StudentStudyReport, type StudentMentorReport } from "../../../lib/student-auth";
 import { formatPortalDate, PortalEmptyState, PortalPageHeading } from "../../../components/student-portal-ui";
 
 function localDate() {
@@ -12,6 +12,7 @@ function localDate() {
 
 export default function StudentReportsPage() {
   const [reports, setReports] = useState<StudentStudyReport[]>([]);
+  const [mentorReports, setMentorReports] = useState<StudentMentorReport[]>([]);
   const [reportDate, setReportDate] = useState(localDate());
   const [minutes, setMinutes] = useState("60");
   const [topics, setTopics] = useState("");
@@ -24,12 +25,22 @@ export default function StudentReportsPage() {
   const [notice, setNotice] = useState("");
 
   async function load() {
-    const result = await fetchStudentReports();
+    const [result, mentorResult] = await Promise.all([
+      fetchStudentReports(),
+      fetchStudentMentorReports(),
+    ]);
     setReports(result.items);
+    setMentorReports(mentorResult.items);
   }
   useEffect(() => {
     let active = true;
-    fetchStudentReports().then((result) => { if (active) setReports(result.items); })
+    Promise.all([fetchStudentReports(), fetchStudentMentorReports()])
+      .then(([result, mentorResult]) => {
+        if (active) {
+          setReports(result.items);
+          setMentorReports(mentorResult.items);
+        }
+      })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "دریافت گزارش‌ها انجام نشد."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -87,6 +98,15 @@ export default function StudentReportsPage() {
           ) : <PortalEmptyState icon="▤" title="هنوز گزارشی ثبت نشده" description="با ثبت اولین گزارش، سابقه فعالیتت در این قسمت نمایش داده می‌شود." />}
         </section>
       </div>
+      <section className="student-portal-card">
+        <div className="student-portal-card-heading"><span className="student-portal-eyebrow">MENTOR FEEDBACK</span><h3>بازخوردهای منتور</h3><p>گزارش هفتگی منتور اختصاصی پس از ثبت در این قسمت قابل مشاهده است.</p></div>
+        {mentorReports.length ? <div className="student-report-list">
+          {mentorReports.map((report) => <article key={report.id} className="student-report-item">
+            <div className="student-report-item-top"><strong>هفته {report.week_number.toLocaleString("fa-IR")}</strong><span>{formatPortalDate(report.created_at)} · {report.mentor_name || "منتور اختصاصی"}</span></div>
+            <p>{report.content}</p>
+          </article>)}
+        </div> : <PortalEmptyState icon="◎" title="هنوز بازخوردی از منتور ثبت نشده" description="پس از شروع منتورینگ و ثبت گزارش هفتگی، ارزیابی و پیشنهادهای منتور را اینجا می‌بینی." />}
+      </section>
     </div>
   );
 }

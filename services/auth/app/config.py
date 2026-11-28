@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     service_name: str = "auth-service"
     service_port: int = 8000
     db_url: str = ""
+    people_internal_url: str = "http://people-service:8000"
 
     jwt_secret: SecretStr
     jwt_expire_minutes: int = 120
