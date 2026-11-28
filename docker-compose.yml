@@ -227,6 +227,28 @@ services:
       retries: 5
       start_period: 15s
 
+  backup:
+    image: postgres:16-alpine
+    container_name: chekad-backup
+    profiles: ["backup"]
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/scripts/backup-loop.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+    volumes:
+      - ./backups:/backups
+      - ./infra/backup:/scripts:ro
+      - chekad_media:/data/media:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [chekad]
+
   frontend:
     build: ./frontend
     container_name: chekad-frontend
