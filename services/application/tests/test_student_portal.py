@@ -38,6 +38,15 @@ CURRENT_STUDENT = {
 
 
 @pytest.fixture()
+def db_session():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture()
 def client():
     Base.metadata.create_all(bind=TEST_ENGINE)
     original_origin = settings.public_site_origin

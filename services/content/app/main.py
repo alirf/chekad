@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 import httpx
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
