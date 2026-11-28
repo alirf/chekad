@@ -65,7 +65,7 @@ export default function TermsPage() {
             <span className="terms-kicker"><i /> روشن، منصفانه و قابل‌فهم</span>
             <h1>قوانین استفاده از <em>خدمات چکاد</em></h1>
             <p>قرار است مسیر همکاری برای همه روشن باشد. این چند نکته، چارچوب ساده‌ی استفاده از سایت و خدمات چکاد را توضیح می‌دهد.</p>
-            <div className="terms-meta"><span>آخرین به‌روزرسانی: ۲۸ آبان ۱۴۰۵</span><span>مطالعه: حدود ۳ دقیقه</span></div>
+            <div className="terms-meta"><span>آخرین به‌روزرسانی: ۷ آذر ۱۴۰۵</span><span>مطالعه: حدود ۳ دقیقه</span></div>
           </div>
           <div className="terms-hero-mark" aria-hidden="true"><b>چ</b><span>CHEKAD</span></div>
         </div>
