@@ -234,7 +234,7 @@ def test_mentorship_and_tutoring_requests_reuse_the_authenticated_student(client
     assert db_session.query(MentorshipApplication).one().student_id == db_session.query(TutoringApplication).one().student_id
 
 
-def test_retention_preserves_student_with_historical_invoice(db_session):
+def test_retention_preserves_student_with_historical_invoice(client, db_session):
     student = Student(
         auth_student_id=7001,
         first_name="آرمان",
@@ -261,7 +261,7 @@ def test_retention_preserves_student_with_historical_invoice(db_session):
     assert student_is_referenced(db_session, student.id) is True
 
 
-def test_retention_purges_expired_request_but_keeps_student_with_invoice(db_session, monkeypatch):
+def test_retention_purges_expired_request_but_keeps_student_with_invoice(client, db_session, monkeypatch):
     student = Student(
         auth_student_id=7002,
         first_name="مینا",
@@ -313,7 +313,7 @@ def test_retention_purges_expired_request_but_keeps_student_with_invoice(db_sess
     assert db_session.get(StudentInvoice, invoice_id) is not None
 
 
-def test_retention_keeps_request_referenced_by_its_invoice(db_session, monkeypatch):
+def test_retention_keeps_request_referenced_by_its_invoice(client, db_session, monkeypatch):
     student = Student(
         auth_student_id=7003,
         first_name="سارا",
