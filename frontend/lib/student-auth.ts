@@ -46,6 +46,8 @@ export interface StudentService {
   note?: string | null;
 }
 
+export const STUDENT_SESSION_INVALID_EVENT = "chekad:student-session-invalid";
+
 export class StudentAuthError extends Error {
   constructor(message: string, public readonly status?: number) {
     super(message);
@@ -76,6 +78,18 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const detail = typeof result.detail === "string" ? result.detail : "";
     if (response.status === 401) {
+      const credentialFlow = new Set([
+        "/auth/student/login",
+        "/auth/student/register",
+        "/auth/student/me",
+        "/auth/student/logout",
+      ]);
+      if (
+        typeof window !== "undefined" &&
+        !credentialFlow.has(path.split("?")[0])
+      ) {
+        window.dispatchEvent(new Event(STUDENT_SESSION_INVALID_EVENT));
+      }
       const isLoginRequest = path === "/auth/student/login";
       throw new StudentAuthError(
         isLoginRequest

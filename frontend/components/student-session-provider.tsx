@@ -14,6 +14,7 @@ import {
   fetchStudentProfile,
   logoutStudent,
   StudentAuthError,
+  STUDENT_SESSION_INVALID_EVENT,
   type StudentProfile,
 } from "../lib/student-auth";
 
@@ -39,6 +40,7 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<SessionSnapshot>(session);
   const requestSequenceRef = useRef(0);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const invalidSessionCheckRef = useRef(false);
   const tabId = useId();
 
   const commitSession = useCallback((next: SessionSnapshot) => {
@@ -129,6 +131,13 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
         void refreshSession();
       }
     };
+    const handleInvalidSession = () => {
+      if (invalidSessionCheckRef.current) return;
+      invalidSessionCheckRef.current = true;
+      void refreshSession().finally(() => {
+        invalidSessionCheckRef.current = false;
+      });
+    };
 
     let handleStorage: ((event: StorageEvent) => void) | undefined;
 
@@ -165,9 +174,11 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener(STUDENT_SESSION_INVALID_EVENT, handleInvalidSession);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener(STUDENT_SESSION_INVALID_EVENT, handleInvalidSession);
       if (handleStorage) {
         window.removeEventListener("storage", handleStorage);
       }
