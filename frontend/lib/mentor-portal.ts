@@ -32,6 +32,33 @@ export class MentorPortalError extends Error {
     this.name = "MentorPortalError";
   }
 }
+function apiErrorMessage(detail: unknown): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+
+  if (Array.isArray(detail)) {
+    const labels: Record<string, string> = {
+      title: "عنوان",
+      description: "توضیح",
+      planned_at: "تاریخ و ساعت",
+      duration_minutes: "مدت فعالیت",
+    };
+    const messages = detail.map((entry) => {
+      if (!entry || typeof entry !== "object") return "";
+      const error = entry as Record<string, unknown>;
+      const location = Array.isArray(error.loc)
+        ? error.loc.filter((part) => typeof part === "string" || typeof part === "number").slice(1).map(String)
+        : [];
+      const field = location.length ? location[location.length - 1] : "";
+      const label = labels[field] || field;
+      const message = typeof error.msg === "string" ? error.msg : "";
+      return message ? (label ? label + ": " + message : message) : "";
+    }).filter(Boolean);
+    if (messages.length) return messages.join("؛ ");
+  }
+
+  return "";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -48,11 +75,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch {
     throw new MentorPortalError("ارتباط با سرویس پنل مشاور برقرار نشد.");
   }
-  const data = await response.json().catch(() => ({} as Record<string, unknown>));
+  const data: unknown = await response.json().catch(() => ({}));
+  const detail = data && typeof data === "object" && "detail" in data
+    ? (data as { detail?: unknown }).detail
+    : undefined;
   if (!response.ok) {
-    const detail = typeof data.detail === "string" ? data.detail : "";
-    if (response.status === 401) throw new MentorPortalError(detail || "نشست مشاور معتبر نیست.", 401);
-    throw new MentorPortalError(detail || "درخواست انجام نشد.", response.status);
+    const message = apiErrorMessage(detail);
+    if (response.status === 401) throw new MentorPortalError(message || "نشست مشاور معتبر نیست.", 401);
+    throw new MentorPortalError(message || "درخواست انجام نشد.", response.status);
   }
   return data as T;
 }
