@@ -772,6 +772,18 @@ def test_student_notifications_are_persistent_readable_and_isolated(client, db_s
     marked = client.patch(f"/student/notifications/{notification_id}/read", headers=origin_headers())
     assert marked.status_code == 200 and marked.json()["read_at"] is not None
     assert client.get("/student/notifications").json()["unread_count"] == 0
+
+    db_session.add_all([
+        StudentNotification(student_auth_id=CURRENT_STUDENT["id"], category="application", title="وضعیت درخواست",
+                            body="درخواست در حال بررسی است.", href="/dashboard", dedupe_key="test-read-all-one"),
+        StudentNotification(student_auth_id=CURRENT_STUDENT["id"], category="invoice", title="فاکتور",
+                            body="فاکتور جدید ثبت شده است.", href="/dashboard/invoices", dedupe_key="test-read-all-two"),
+    ])
+    db_session.commit()
+    all_read = client.post("/student/notifications/read-all", headers=origin_headers())
+    assert all_read.status_code == 200 and all_read.json()["updated"] == 2
+    assert client.get("/student/notifications").json()["unread_count"] == 0
+
     CURRENT_STUDENT["id"] = 99
     assert client.get("/student/notifications").json()["total"] == 1
     assert client.patch(f"/student/notifications/{notification_id}/read", headers=origin_headers()).status_code == 404

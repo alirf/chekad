@@ -56,7 +56,7 @@ export default function AdminRetentionPage() {
     ["دانش‌آموزان رهگیری‌شده", report?.tracked_students],
     ["فعال در ۷ روز اخیر", report?.active_students_7d],
     ["فعال در ۳۰ روز اخیر", report?.active_students_30d],
-    ["بازگشته در چند روز هفته", report?.returning_students_7d],
+    ["بازگشته در دست‌کم ۲ روز از ۷ روز", report?.returning_students_7d],
   ];
 
   return (
@@ -116,7 +116,7 @@ export default function AdminRetentionPage() {
           </div>
         ) : <p className="p-8 text-center text-sm text-slate-400">هنوز داده کافی برای تشکیل Cohort ثبت نشده است.</p>}
       </section>
-      <p className="text-xs leading-6 text-slate-400">مبنای محاسبه: {report?.retention_basis || "—"}. داده‌ها از زمان فعال‌شدن رهگیری جمع می‌شوند؛ روزهای قبل از آن قابل بازسازی نیستند. شناسه، محتوای پیام، متن گزارش و اطلاعات شخصی برای این گزارش ذخیره یا نمایش داده نمی‌شود.</p>
+      <p className="text-xs leading-6 text-slate-400">مبنای محاسبه: {report?.retention_basis || "—"}. داده‌ها از زمان فعال‌شدن رهگیری جمع می‌شوند؛ روزهای قبل از آن قابل بازسازی نیستند. شناسه داخلی حساب فقط برای حذف رویداد تکراری و محاسبه cohort در دیتابیس نگهداری می‌شود و در گزارش نمایش داده نمی‌شود؛ متن پیام، گزارش و سایر محتوای شخصی ذخیره نمی‌شود.</p>
     </div>
   );
 }
