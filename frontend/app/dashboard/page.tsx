@@ -106,7 +106,7 @@ export default function StudentDashboardPage() {
       eyebrow: "ACTION REQUIRED",
       title: latestApplication.status === "options_proposed" ? "پیشنهادهای آموزشی آماده بررسی است" : "برای ادامه درخواست، پاسخ تو لازم است",
       description: "گفت‌وگوهای پنل را باز کن و پیام‌های مربوط به درخواستت را بررسی کن.",
-      label: "بررسی پیام‌ها", href: "/dashboard/messages",
+      label: "مشاهده پیشنهادها", href: "/dashboard/requests",
     };
   } else if (activeClass && taskCount > 0) {
     nextStep = {
@@ -225,6 +225,7 @@ export default function StudentDashboardPage() {
             <Link href="/dashboard/calendar"><span>▦</span><strong>تقویم</strong><small>مرور زمان‌بندی</small></Link>
             <Link href="/dashboard/classes"><span>▣</span><strong>کلاس‌ها</strong><small>جلسات آموزشی</small></Link>
             <Link href="/dashboard/exams"><span>◇</span><strong>آزمون‌ها</strong><small>فهرست آزمون‌ها</small></Link>
+            <Link href="/dashboard/requests"><span>◎</span><strong>پیشنهادهای همراه</strong><small>انتخاب منتور یا مدرس</small></Link>
           </div>
         </section>
       </div>
