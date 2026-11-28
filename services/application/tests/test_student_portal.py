@@ -208,7 +208,7 @@ def test_student_cannot_create_or_edit_weekly_plan_and_weekly_plan_is_not_monthl
 
 def test_admin_assignment_creates_sessions_and_restricted_advisor_chat(client, db_session, monkeypatch):
     from app import main as application_main
-    from app.models import MentorshipApplication, MentorAssignment, Student
+    from app.models import ApplicationOffer, MentorshipApplication, MentorAssignment, Student
 
     app.dependency_overrides[require_admin] = lambda: {"id": 7, "name": "مدیر"}
     app.dependency_overrides[require_mentor] = lambda: {
@@ -250,6 +250,13 @@ def test_admin_assignment_creates_sessions_and_restricted_advisor_chat(client, d
         student_note="برنامه‌ریزی و پیگیری",
     )
     db_session.add(application)
+    db_session.flush()
+    db_session.add(ApplicationOffer(
+        application_kind="mentorship", application_id=application.id, person_id=12,
+        person_name="منتور فیزیک", field="physics", description="منتور با تجربه در المپیاد فیزیک",
+        terms="۸ جلسه ۲۰ دقیقه‌ای در یک ماه", status="selected", created_by_admin_id=7,
+        selected_at=datetime.now(timezone.utc),
+    ))
     db_session.commit()
     application_id = application.id
 
@@ -551,7 +558,7 @@ def test_teacher_private_chat_and_assigned_weekly_plan_are_isolated_and_live(cli
 
 def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch):
     from app import main as application_main
-    from app.models import Student, MentorshipApplication, MentorAssignment, AssignedStudyTask
+    from app.models import ApplicationOffer, Student, MentorshipApplication, MentorAssignment, AssignedStudyTask
 
     app.dependency_overrides[require_mentor] = lambda: {
         "id": 73,
@@ -584,9 +591,16 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
     application = MentorshipApplication(
         student_id=student_profile.id,
         field="physics",
-        status="reviewing",
+        status="accepted",
     )
     db_session.add(application)
+    db_session.flush()
+    db_session.add(ApplicationOffer(
+        application_kind="mentorship", application_id=application.id, person_id=12,
+        person_name="منتور فیزیک", field="physics", description="منتور با تجربه در المپیاد فیزیک",
+        terms="۸ جلسه ۲۰ دقیقه‌ای در یک ماه", status="selected", created_by_admin_id=7,
+        selected_at=datetime.now(timezone.utc),
+    ))
     db_session.commit()
 
     assigned = client.post(
