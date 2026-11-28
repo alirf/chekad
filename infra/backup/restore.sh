@@ -43,8 +43,8 @@ for service in auth application people content; do
   psql -X -v ON_ERROR_STOP=1 --username "$PGUSER" --dbname "$db_name" -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO $runtime"
   psql -X -v ON_ERROR_STOP=1 --username "$PGUSER" --dbname "$db_name" -c "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO $runtime"
 done
-rm -rf /data/media
-mkdir -p /data
+mkdir -p /data/media
+find /data/media -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 tar -xzf "$snapshot/media.tar.gz" -C /data
 test -d /data/media
 echo "Restore completed. Start application services and verify health."

@@ -255,7 +255,7 @@ services:
     volumes:
       - ./backups:/backups
       - ./infra/backup:/scripts:ro
-      - chekad_media:/data/media:ro
+      - chekad_media:/data/media
     depends_on:
       postgres:
         condition: service_healthy
