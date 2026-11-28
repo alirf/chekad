@@ -144,10 +144,10 @@ export function EditorialList({ kind }: { kind: "articles" | "exams" }) {
     );
   }
 
-  const categories = ["همه مطالب", ...Array.from(new Set(items.map((item) => item.category?.trim()).filter((value): value is string => Boolean(value))))];
+  const categories = ["همه مطالب", ...Array.from(new Set(items.map((item) => item.category?.trim() || "یادداشت")))];
   const visibleArticles = selectedCategory === "همه مطالب"
     ? items
-    : items.filter((item) => (item.category?.trim() || "عمومی") === selectedCategory);
+    : items.filter((item) => (item.category?.trim() || "یادداشت") === selectedCategory);
   const featuredArticle = visibleArticles[0];
   const remainingArticles = visibleArticles.slice(1);
 
