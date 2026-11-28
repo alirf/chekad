@@ -106,7 +106,8 @@ export default function StudentDashboardPage() {
       eyebrow: "ACTION REQUIRED",
       title: latestApplication.status === "options_proposed" ? "پیشنهادهای آموزشی آماده بررسی است" : "برای ادامه درخواست، پاسخ تو لازم است",
       description: "گفت‌وگوهای پنل را باز کن و پیام‌های مربوط به درخواستت را بررسی کن.",
-      label: "مشاهده پیشنهادها", href: "/dashboard/requests",
+      label: latestApplication.status === "options_proposed" ? "مشاهده پیشنهادها" : "بررسی پیام‌ها",
+      href: latestApplication.status === "options_proposed" ? "/dashboard/requests" : "/dashboard/messages",
     };
   } else if (activeClass && taskCount > 0) {
     nextStep = {

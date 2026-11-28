@@ -1762,6 +1762,8 @@ async def create_application_offer(
     existing = db.query(models.ApplicationOffer).filter_by(
         application_kind=kind, application_id=application.id, person_id=payload.person_id
     ).first()
+    if existing is not None and existing.status == "proposed" and existing.expires_at is not None and existing.expires_at <= utcnow():
+        existing.status = "expired"
     if existing is not None and existing.status in {"selected", "proposed"}:
         raise HTTPException(409, "این فرد برای این درخواست قبلاً پیشنهاد فعال یا انتخاب‌شده دارد.")
     person_name = (person.get("first_name", "") + " " + person.get("last_name", "")).strip()[:180]
@@ -1788,7 +1790,7 @@ async def create_application_offer(
         db, application.student.auth_student_id if application.student else None,
         "application", "پیشنهاد همراه آموزشی آماده بررسی است",
         "گزینه «" + offer.person_name + "» برای درخواست شما آماده انتخاب است. جزئیات را در پنل بررسی کنید.",
-        "/dashboard/requests", f"application-offer:{kind}:{application.id}:{payload.person_id}:proposed",
+        "/dashboard/requests", f"application-offer:{kind}:{application.id}:{payload.person_id}:proposed:{uuid4().hex}",
     )
     try:
         db.commit()
