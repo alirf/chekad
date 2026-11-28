@@ -2,6 +2,12 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
+type StudentChoice = {
+  student_auth_id: number;
+  display_name: string;
+  grade?: string | null;
+  field: "physics" | "computer";
+};
 type Invoice = {
   id: number;
   invoice_number: string;
@@ -24,6 +30,8 @@ async function json<T>(response: Response): Promise<T> {
 
 export default function AdminInvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [students, setStudents] = useState<StudentChoice[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
   const [studentId, setStudentId] = useState("");
   const [serviceType, setServiceType] = useState<"mentorship" | "tutoring" | "other">("other");
   const [applicationId, setApplicationId] = useState("");
@@ -38,15 +46,26 @@ export default function AdminInvoicesPage() {
   const [notice, setNotice] = useState("");
 
   const load = useCallback(async () => {
-    const result = await json<{ items: Invoice[]; total: number }>(await fetch("/api/application/admin/invoices", { credentials: "same-origin", cache: "no-store" }));
-    setInvoices(result.items);
+    const [invoiceResult, studentResult] = await Promise.all([
+      json<{ items: Invoice[]; total: number }>(await fetch("/api/application/admin/invoices", { credentials: "same-origin", cache: "no-store" })),
+      json<{ items: StudentChoice[]; total: number }>(await fetch("/api/application/admin/students", { credentials: "same-origin", cache: "no-store" })),
+    ]);
+    setInvoices(invoiceResult.items);
+    setStudents(studentResult.items);
   }, []);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/application/admin/invoices", { credentials: "same-origin", cache: "no-store" }).then(json<{ items: Invoice[]; total: number }>)
-      .then((result) => { if (active) setInvoices(result.items); })
-      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "دریافت فاکتورها انجام نشد."); })
+    Promise.all([
+      fetch("/api/application/admin/invoices", { credentials: "same-origin", cache: "no-store" }).then(json<{ items: Invoice[]; total: number }>),
+      fetch("/api/application/admin/students", { credentials: "same-origin", cache: "no-store" }).then(json<{ items: StudentChoice[]; total: number }>),
+    ])
+      .then(([invoiceResult, studentResult]) => {
+        if (!active) return;
+        setInvoices(invoiceResult.items);
+        setStudents(studentResult.items);
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "دریافت فاکتورها و فهرست دانش‌آموزان انجام نشد."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
@@ -69,7 +88,7 @@ export default function AdminInvoicesPage() {
         }),
       }));
       setNotice("فاکتور " + created.invoice_number + " صادر شد.");
-      setStudentId(""); setApplicationId(""); setTitle(""); setAmount(""); setDescription(""); setDueDate(""); setInstructions("");
+      setStudentId(""); setStudentSearch(""); setApplicationId(""); setTitle(""); setAmount(""); setDescription(""); setDueDate(""); setInstructions("");
       await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "صدور فاکتور انجام نشد."); }
     finally { setBusy(false); }
@@ -110,7 +129,23 @@ export default function AdminInvoicesPage() {
       {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">{notice}</div>}
       <form onSubmit={create} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:grid-cols-2">
         <div className="md:col-span-2"><h2 className="font-black text-slate-900">فاکتور جدید</h2><p className="mt-1 text-xs text-slate-500">شناسه حساب دانش‌آموز از سرویس احراز هویت گرفته می‌شود؛ پیش از صدور با پرونده درست تطبیق بده.</p></div>
-        <label className="grid gap-1 text-xs font-bold text-slate-600">شناسه حساب دانش‌آموز<input type="number" min="1" value={studentId} onChange={(event) => setStudentId(event.target.value)} required className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm" /></label>
+        <div className="grid gap-1 text-xs font-bold text-slate-600">
+          <label htmlFor="invoice-student-search">جست‌وجوی دانش‌آموز</label>
+          <input id="invoice-student-search" value={studentSearch} onChange={(event) => setStudentSearch(event.target.value)} placeholder="نام، نام خانوادگی یا شناسه حساب" className="min-h-10 rounded-lg border border-slate-200 px-3 text-sm" />
+          <label htmlFor="invoice-student">انتخاب دانش‌آموز</label>
+          <select id="invoice-student" value={studentId} onChange={(event) => setStudentId(event.target.value)} required className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm">
+            <option value="">انتخاب دانش‌آموز</option>
+            {students.filter((student) => {
+              const search = studentSearch.trim().toLocaleLowerCase();
+              return !search || student.display_name.toLocaleLowerCase().includes(search) || String(student.student_auth_id).includes(search);
+            }).map((student) => (
+              <option key={student.student_auth_id} value={student.student_auth_id}>
+                {student.display_name} · {student.grade || "پایه نامشخص"} · {student.field === "physics" ? "فیزیک" : "کامپیوتر"} · حساب #{student.student_auth_id}
+              </option>
+            ))}
+          </select>
+          <small className="font-normal text-slate-400">{students.length.toLocaleString("fa-IR")} دانش‌آموز دارای پروفایل خدماتی</small>
+        </div>
         <label className="grid gap-1 text-xs font-bold text-slate-600">نوع خدمت<select value={serviceType} onChange={(event) => setServiceType(event.target.value as typeof serviceType)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm"><option value="other">سایر</option><option value="mentorship">منتورینگ</option><option value="tutoring">کلاس خصوصی</option></select></label>
         <label className="grid gap-1 text-xs font-bold text-slate-600">شناسه درخواست (برای منتورینگ/کلاس الزامی)<input type="number" min="1" value={applicationId} onChange={(event) => setApplicationId(event.target.value)} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm" /></label>
         <label className="grid gap-1 text-xs font-bold text-slate-600">عنوان فاکتور<input value={title} onChange={(event) => setTitle(event.target.value)} minLength={3} maxLength={180} required className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm" /></label>

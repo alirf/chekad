@@ -679,3 +679,50 @@ def test_realtime_message_manager_broadcasts_without_database_or_http_portals():
     accepted, events = asyncio.run(scenario())
     assert accepted is True
     assert events == [{"type": "message", "message": {"id": 13, "body": "realtime"}}]
+
+
+
+def test_admin_student_directory_is_searchable_and_excludes_private_contact_fields(client, db_session):
+    from app.models import Student
+
+    db_session.add_all([
+        Student(
+            auth_student_id=701,
+            first_name="آرمان",
+            last_name="رضایی",
+            grade="یازدهم",
+            field="physics",
+            parent_phone="09121111111",
+        ),
+        Student(
+            auth_student_id=702,
+            first_name="نگار",
+            last_name="محمدی",
+            grade="دوازدهم",
+            field="computer",
+            parent_phone="09122222222",
+        ),
+        Student(
+            first_name="پروفایل",
+            last_name="بدون حساب",
+            grade="دهم",
+            field="physics",
+        ),
+    ])
+    db_session.commit()
+
+    all_students = client.get("/admin/students")
+    assert all_students.status_code == 200
+    assert all_students.json()["total"] == 2
+    assert {item["student_auth_id"] for item in all_students.json()["items"]} == {701, 702}
+    assert "parent_phone" not in all_students.json()["items"][0]
+
+    by_name = client.get("/admin/students?search=آرمان")
+    assert by_name.status_code == 200
+    assert by_name.json()["total"] == 1
+    assert by_name.json()["items"][0]["student_auth_id"] == 701
+
+    by_id = client.get("/admin/students?search=702")
+    assert by_id.status_code == 200
+    assert by_id.json()["total"] == 1
+    assert by_id.json()["items"][0]["display_name"] == "نگار محمدی"

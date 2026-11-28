@@ -1911,6 +1911,43 @@ def student_invoices(
     return {"items": [_serialize_invoice(row) for row in rows], "total": len(rows)}
 
 
+@app.get("/admin/students")
+def admin_student_directory(
+    search: str | None = Query(default=None, max_length=100),
+    db: Session = Depends(get_db),
+    _: dict = Depends(require_admin),
+):
+    """Return a minimal, searchable list for admin-side invoice assignment."""
+    query = db.query(models.Student).filter(models.Student.auth_student_id.is_not(None))
+    term = (search or "").strip()
+    if term:
+        pattern = "%" + term.replace("%", "\\%").replace("_", "\\_") + "%"
+        filters = [
+            models.Student.first_name.ilike(pattern),
+            models.Student.last_name.ilike(pattern),
+        ]
+        if term.isdecimal():
+            filters.append(models.Student.auth_student_id == int(term))
+        query = query.filter(or_(*filters))
+    rows = (
+        query.order_by(models.Student.last_name.asc(), models.Student.first_name.asc())
+        .limit(500)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "student_auth_id": row.auth_student_id,
+                "display_name": (row.first_name + " " + row.last_name).strip(),
+                "grade": row.grade,
+                "field": row.field,
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
 @app.get("/admin/invoices")
 def admin_invoices(
     student_auth_id: int | None = Query(default=None, ge=1),
