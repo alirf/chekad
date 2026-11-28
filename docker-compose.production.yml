@@ -1,0 +1,7 @@
+services:
+  gateway:
+    volumes:
+      - ./gateway/nginx.production.conf:/etc/nginx/nginx.conf:ro
+      - ${TLS_CERT_DIR:?Set TLS_CERT_DIR to a host directory containing fullchain.pem and privkey.pem}:/etc/nginx/tls:ro
+    ports:
+      - "${GATEWAY_HTTPS_PORT:-443}:443"
