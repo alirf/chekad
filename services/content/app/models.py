@@ -62,6 +62,7 @@ class Exam(Base):
     registration_url = Column(String(1000))
     status = Column(String(20), default="draft", nullable=False, index=True)
     cover_image_url = Column(String(1000))
+    results_published = Column(Boolean, default=False, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
 

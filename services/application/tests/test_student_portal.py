@@ -50,7 +50,7 @@ def db_session():
 def client():
     Base.metadata.create_all(bind=TEST_ENGINE)
     original_origin = settings.public_site_origin
-    settings.public_site_origin = "https://testserver"
+    settings.public_site_origin = "http://testserver"
 
     def override_get_db():
         db = TestingSessionLocal()
@@ -263,7 +263,7 @@ def test_admin_assignment_creates_sessions_and_restricted_advisor_chat(client, d
 
     assigned = client.post(
         "/admin/assignments",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={
             "kind": "mentorship",
             "application_id": application_id,
@@ -396,7 +396,7 @@ def test_admin_invoice_creation_payment_and_student_isolation(client, db_session
 
     created = client.post(
         "/admin/invoices",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={
             "student_auth_id": CURRENT_STUDENT["id"],
             "service_type": "other",
@@ -419,7 +419,7 @@ def test_admin_invoice_creation_payment_and_student_isolation(client, db_session
 
     paid = client.patch(
         f"/admin/invoices/{invoice_id}",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={"status": "paid", "payment_reference": "MANUAL-RECEIPT-001"},
     )
     assert paid.status_code == 200
@@ -483,7 +483,7 @@ def test_teacher_private_chat_and_assigned_weekly_plan_are_isolated_and_live(cli
 
     created = client.post(
         "/student/messages/teacher",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
     )
     assert created.status_code == 201
     thread_id = created.json()["id"]
@@ -504,7 +504,7 @@ def test_teacher_private_chat_and_assigned_weekly_plan_are_isolated_and_live(cli
     with client.websocket_connect(f"/teacher/messages/threads/{thread_id}/ws") as socket:
         sent = client.post(
             f"/student/messages/threads/{thread_id}/messages",
-            headers={"Origin": "https://testserver"},
+            headers={"Origin": "http://testserver"},
             json={"body": "برای جلسه فردا چه مبحثی را مرور کنم؟"},
         )
         assert sent.status_code == 201
@@ -514,7 +514,7 @@ def test_teacher_private_chat_and_assigned_weekly_plan_are_isolated_and_live(cli
 
     task = client.post(
         f"/teacher/assignments/{assignment_id}/weekly-plan",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={
             "title": "حل تمرین‌های مکانیک",
             "description": "تمرین‌های فصل دوم",
@@ -532,7 +532,7 @@ def test_teacher_private_chat_and_assigned_weekly_plan_are_isolated_and_live(cli
 
     completed = client.patch(
         f"/student/weekly-plan/{task_id}",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={"status": "completed"},
     )
     assert completed.status_code == 200
@@ -596,7 +596,7 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
 
     assigned = client.post(
         "/admin/assignments",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={
             "kind": "mentorship",
             "application_id": application.id,
@@ -611,7 +611,7 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
 
     created = client.post(
         f"/mentor/assignments/{assignment_id}/weekly-plan",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={
             "title": "مطالعه الکتریسیته",
             "planned_at": "2026-12-02T18:00:00+03:30",
@@ -627,7 +627,7 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
     # Students may mark progress, but cannot create or edit the mentor-authored plan.
     legacy_task = client.post(
         "/student/study-tasks",
-        headers={"Origin": "https://testserver"},
+        headers={"Origin": "http://testserver"},
         json={
             "title": "برنامه شخصی قدیمی",
             "planned_at": "2026-12-02T18:00:00+03:30",

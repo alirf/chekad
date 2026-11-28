@@ -2204,27 +2204,27 @@ def student_weekly_plan(
 ):
     """Combine the student's personal planner with assigned mentor/teacher tasks."""
     profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
-    if profile is None:
-        return {"items": [], "total": 0}
-
-    mentor_ids = [
-        row.id for row in db.query(models.MentorAssignment.id)
-        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
-        .filter(
-            models.MentorshipApplication.student_id == profile.id,
-            models.MentorAssignment.status == "active",
-        )
-        .all()
-    ]
-    tutor_ids = [
-        row.id for row in db.query(models.TutorAssignment.id)
-        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
-        .filter(
-            models.TutoringApplication.student_id == profile.id,
-            models.TutorAssignment.status == "active",
-        )
-        .all()
-    ]
+    mentor_ids = []
+    tutor_ids = []
+    if profile is not None:
+        mentor_ids = [
+            row.id for row in db.query(models.MentorAssignment.id)
+            .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+            .filter(
+                models.MentorshipApplication.student_id == profile.id,
+                models.MentorAssignment.status == "active",
+            )
+            .all()
+        ]
+        tutor_ids = [
+            row.id for row in db.query(models.TutorAssignment.id)
+            .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+            .filter(
+                models.TutoringApplication.student_id == profile.id,
+                models.TutorAssignment.status == "active",
+            )
+            .all()
+        ]
 
     personal_query = db.query(models.StudentStudyTask).filter_by(student_auth_id=student["id"])
     if start is not None:
