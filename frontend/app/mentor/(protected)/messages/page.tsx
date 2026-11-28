@@ -4,32 +4,202 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MentorAuthError } from "../../../../lib/mentor-auth";
-import { fetchMentorAssignments,fetchMentorWeeklyPlan,MentorPortalError,type MentorAssignment } from "../../../../lib/mentor-portal";
-import { openPortalMessageSocket,type PortalMessage } from "../../../../lib/student-auth";
+import { openPortalMessageSocket, type PortalMessage } from "../../../../lib/student-auth";
+import { MessageCenter } from "../../../../components/message-center";
 
-type Thread={id:number;channel:"advisor";subject:string;student_name:string;status:"open"|"closed";last_message_at:string;unread_count:number;field:"physics"|"computer"};
-async function json<T>(r:Response):Promise<T>{const d=await r.json().catch(()=>({}));if(!r.ok){const msg=typeof d.detail==="string"?d.detail:"درخواست انجام نشد.";if(r.status===401)throw new MentorAuthError(msg,401);throw new Error(msg);}return d as T;}
-function dt(v:string){const d=new Date(v);return Number.isNaN(d.getTime())?"—":new Intl.DateTimeFormat("fa-IR",{dateStyle:"medium",timeStyle:"short"}).format(d);}
-const api=(path:string,init?:RequestInit)=>fetch("/api/application"+path,{...init,credentials:"same-origin",cache:"no-store",headers:{Accept:"application/json",...(init?.body?{"Content-Type":"application/json"}:{}),...init?.headers}});
-export default function MentorMessagesPage(){
- const router=useRouter(),[threads,setThreads]=useState<Thread[]>([]),[selectedId,setSelectedId]=useState<number|null>(null),[messages,setMessages]=useState<PortalMessage[]>([]),[draft,setDraft]=useState("");
- const [loading,setLoading]=useState(true),[sending,setSending]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[live,setLive]=useState(false);
- const selected=useMemo(()=>threads.find(x=>x.id===selectedId)||null,[threads,selectedId]);
- async function loadThreads(){const r=await json<{items:Thread[];total:number}>(await api("/mentor/messages/threads"));setThreads(r.items);setSelectedId(v=>v&&r.items.some(x=>x.id===v)?v:(r.items[0]?.id??null));}
- useEffect(()=>{let active=true;api("/mentor/messages/threads").then(json<{items:Thread[];total:number}>).then(r=>{if(active){setThreads(r.items);setSelectedId(r.items[0]?.id??null);}}).catch(e=>{if(!active)return;if(e instanceof MentorAuthError&&e.status===401)router.replace("/mentor/login");else setError(e.message||"دریافت گفت‌وگوها انجام نشد.");}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[router]);
- useEffect(()=>{if(selectedId===null)return;let active=true,socket:WebSocket|null=null,retry:number|null=null,fallback:number|null=null;
-  const refresh=()=>{void api("/mentor/messages/threads/"+selectedId+"/messages").then(json<{items:PortalMessage[];total:number}>).then(r=>{if(active){setMessages(r.items);setThreads(cur=>cur.map(t=>t.id===selectedId?{...t,unread_count:0}:t));}}).catch(e=>{if(active){if(e instanceof MentorAuthError&&e.status===401)router.replace("/mentor/login");else setError(e.message||"دریافت پیام‌ها انجام نشد.");}});};
-  const start=()=>{if(!fallback&&active)fallback=window.setInterval(refresh,12000);},stop=()=>{if(fallback)window.clearInterval(fallback);fallback=null;};
-  const connect=()=>{if(!active)return;try{socket=openPortalMessageSocket("mentor",selectedId,m=>{if(active){setMessages(cur=>cur.some(x=>x.id===m.id)?cur:[...cur,m]);setThreads(cur=>cur.map(t=>t.id===selectedId?{...t,last_message_at:m.created_at}:t));}},()=>{if(active){setLive(true);stop();}},()=>{if(active){setLive(false);start();retry=window.setTimeout(connect,2500);}});}catch{setLive(false);start();}};
-  refresh();connect();return()=>{active=false;setLive(false);stop();if(retry)window.clearTimeout(retry);socket?.close();};
- },[selectedId,router]);
- async function send(e:FormEvent){e.preventDefault();if(!selected||!draft.trim())return;setSending(true);setError("");setNotice("");try{const m=await json<PortalMessage>(await api("/mentor/messages/threads/"+selected.id+"/messages",{method:"POST",body:JSON.stringify({body:draft.trim()})}));setMessages(cur=>cur.some(x=>x.id===m.id)?cur:[...cur,m]);setDraft("");await loadThreads();setNotice("پاسخ برای دانش‌آموز ارسال شد.");}catch(e){if(e instanceof MentorAuthError&&e.status===401)router.replace("/mentor/login");else setError(e instanceof Error?e.message:"ارسال پیام انجام نشد.");}finally{setSending(false);}}
- return <div className="space-y-5">
-  <header><p className="text-xs font-bold tracking-widest text-blue-600">MENTOR MESSENGER</p><h1 className="mt-1 text-2xl font-black">گفت‌وگو با دانش‌آموزان</h1><p className="mt-1 text-sm text-slate-500">فقط مکالمات شاگردانی را می‌بینی که به پروفایل منتور تو تخصیص داده شده‌اند.</p><div className="mt-3 flex gap-2"><Link href="/mentor" className="rounded-lg border bg-white px-3 py-2 text-xs font-bold">خانه پنل</Link><Link href="/mentor/weekly-plan" className="rounded-lg border bg-white px-3 py-2 text-xs font-bold">برنامه هفتگی شاگردان</Link><Link href="/mentor/reports" className="rounded-lg border bg-white px-3 py-2 text-xs font-bold">گزارش مطالعه</Link></div></header>
-  {error&&<div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}{notice&&<div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">{notice}</div>}
-  <div className="grid min-h-[600px] overflow-hidden rounded-2xl border bg-white shadow-sm lg:grid-cols-[320px_minmax(0,1fr)]">
-   <aside className="border-b lg:border-b-0 lg:border-l"><div className="flex items-center justify-between border-b px-4 py-4"><strong className="text-sm">شاگردان من</strong><span className="text-xs text-slate-400">{threads.length} گفت‌وگو</span></div><div className="max-h-[550px] overflow-y-auto p-2">{threads.map(t=><button key={t.id} type="button" onClick={()=>setSelectedId(t.id)} className={"flex w-full items-center gap-3 rounded-xl p-3 text-right "+(selectedId===t.id?"bg-blue-50":"hover:bg-slate-50")}><span className="grid h-10 w-10 place-items-center rounded-full bg-blue-100 font-black text-blue-700">{t.student_name.slice(0,1)}</span><span className="min-w-0 flex-1"><strong className="block truncate text-xs">{t.student_name}</strong><small className="mt-1 block truncate text-[10px] text-slate-400">{t.subject} · {dt(t.last_message_at)}</small></span>{t.unread_count>0&&<b className="rounded-full bg-rose-500 px-2 py-1 text-[9px] text-white">{t.unread_count}</b>}</button>)}{loading&&<p className="p-6 text-center text-xs text-slate-400">در حال بارگذاری...</p>}{!loading&&!threads.length&&<p className="p-6 text-center text-xs text-slate-400">هنوز گفت‌وگویی از شاگردانت شروع نشده است.</p>}</div></aside>
-   <section className="flex min-w-0 flex-col bg-slate-50">{selected?<><header className="flex items-center justify-between border-b bg-white px-5 py-4"><div><strong className="text-sm">{selected.student_name}</strong><p className="mt-1 text-[10px] text-slate-400">{selected.field==="physics"?"المپیاد فیزیک":"المپیاد کامپیوتر"} · {selected.subject}</p></div><span className="text-[10px] text-slate-500">{live?"اتصال بلادرنگ":"همگام‌سازی دوره‌ای"}</span></header><div className="flex flex-1 flex-col gap-3 overflow-y-auto p-5">{messages.map(m=><article key={m.id} className={"max-w-[82%] rounded-xl border px-4 py-3 shadow-sm "+(m.sender_type==="mentor"?"mr-auto border-blue-100 bg-blue-50":"ml-auto border-slate-200 bg-white")}><p className="whitespace-pre-wrap break-words text-xs leading-7 text-slate-700">{m.body}</p><time className="mt-2 block text-left text-[9px] text-slate-400">{dt(m.created_at)}</time></article>)}{!messages.length&&<p className="m-auto text-xs text-slate-400">هنوز پیامی وجود ندارد.</p>}</div>{selected.status==="open"?<form onSubmit={send} className="flex items-end gap-3 border-t bg-white p-3"><textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="پاسخ خود را بنویس..." className="min-h-12 flex-1 resize-y rounded-xl border p-3 text-xs"/><button disabled={sending||!draft.trim()} className="rounded-xl bg-blue-600 px-4 py-3 text-xs font-bold text-white disabled:opacity-50">{sending?"...":"ارسال پاسخ"}</button></form>:<div className="bg-white p-4 text-center text-xs text-slate-400">این گفت‌وگو بسته است.</div>}</>:<div className="m-auto text-xs text-slate-400">یک شاگرد را انتخاب کن.</div>}</section>
-  </div>
- </div>;
+type Thread = {
+  id: number;
+  channel: "advisor";
+  subject: string;
+  student_name: string;
+  status: "open" | "closed";
+  last_message_at: string;
+  unread_count: number;
+  field: "physics" | "computer";
+};
+async function json<T>(response: Response): Promise<T> {
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof data.detail === "string" ? data.detail : "درخواست انجام نشد.";
+    if (response.status === 401) throw new MentorAuthError(message, 401);
+    throw new Error(message);
+  }
+  return data as T;
+}
+const api = (path: string, init?: RequestInit) => fetch("/api/application" + path, {
+  ...init,
+  credentials: "same-origin",
+  cache: "no-store",
+  headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...init?.headers },
+});
+
+export default function MentorMessagesPage() {
+  const router = useRouter();
+  const [threads, setThreads] = useState<Thread[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<PortalMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [live, setLive] = useState(false);
+
+  const selected = useMemo(() => threads.find((thread) => thread.id === selectedId) || null, [threads, selectedId]);
+
+  async function loadThreads() {
+    const result = await json<{ items: Thread[]; total: number }>(await api("/mentor/messages/threads"));
+    setThreads(result.items);
+    setSelectedId((current) => current && result.items.some((thread) => thread.id === current) ? current : (result.items[0]?.id ?? null));
+  }
+
+  useEffect(() => {
+    let active = true;
+    api("/mentor/messages/threads")
+      .then(json<{ items: Thread[]; total: number }>)
+      .then((result) => {
+        if (active) {
+          setThreads(result.items);
+          setSelectedId(result.items[0]?.id ?? null);
+        }
+      })
+      .catch((cause) => {
+        if (!active) return;
+        if (cause instanceof MentorAuthError && cause.status === 401) router.replace("/mentor/login");
+        else setError(cause instanceof Error ? cause.message : "دریافت گفتگوها انجام نشد.");
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [router]);
+
+  useEffect(() => {
+    if (selectedId === null) {
+      setMessages([]);
+      return;
+    }
+    let active = true;
+    let socket: WebSocket | null = null;
+    let retry: number | null = null;
+    let fallback: number | null = null;
+
+    const refresh = () => {
+      void api("/mentor/messages/threads/" + selectedId + "/messages")
+        .then(json<{ items: PortalMessage[]; total: number }>)
+        .then((result) => {
+          if (active) {
+            setMessages(result.items);
+            setThreads((current) => current.map((thread) => thread.id === selectedId ? { ...thread, unread_count: 0 } : thread));
+          }
+        })
+        .catch((cause) => {
+          if (!active) return;
+          if (cause instanceof MentorAuthError && cause.status === 401) router.replace("/mentor/login");
+          else setError(cause instanceof Error ? cause.message : "دریافت پیام‌ها انجام نشد.");
+        });
+    };
+    const startFallback = () => { if (!fallback && active) fallback = window.setInterval(refresh, 12000); };
+    const stopFallback = () => { if (fallback) window.clearInterval(fallback); fallback = null; };
+    const connect = () => {
+      if (!active) return;
+      try {
+        socket = openPortalMessageSocket("mentor", selectedId, (message) => {
+          if (!active) return;
+          setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+          setThreads((current) => current.map((thread) => thread.id === selectedId ? { ...thread, last_message_at: message.created_at } : thread));
+        }, () => {
+          if (active) { setLive(true); stopFallback(); }
+        }, () => {
+          if (active) { setLive(false); startFallback(); retry = window.setTimeout(connect, 2500); }
+        });
+      } catch {
+        setLive(false);
+        startFallback();
+      }
+    };
+    refresh();
+    connect();
+    return () => {
+      active = false;
+      setLive(false);
+      stopFallback();
+      if (retry) window.clearTimeout(retry);
+      socket?.close();
+    };
+  }, [selectedId, router]);
+
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !draft.trim()) return;
+    setSending(true);
+    setError("");
+    setNotice("");
+    try {
+      const message = await json<PortalMessage>(await api("/mentor/messages/threads/" + selected.id + "/messages", {
+        method: "POST",
+        body: JSON.stringify({ body: draft.trim() }),
+      }));
+      setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+      setDraft("");
+      await loadThreads();
+      setNotice("پاسخ برای دانش‌آموز ارسال شد.");
+    } catch (cause) {
+      if (cause instanceof MentorAuthError && cause.status === 401) router.replace("/mentor/login");
+      else setError(cause instanceof Error ? cause.message : "ارسال پیام انجام نشد.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const filters = [
+    { id: "all", label: "همه شاگردان" },
+    { id: "unread", label: "پیام‌های جدید" },
+    { id: "physics", label: "فیزیک" },
+    { id: "computer", label: "کامپیوتر" },
+  ];
+
+  return (
+    <MessageCenter
+      eyebrow="MENTOR MESSENGER"
+      title="گفت‌وگو با دانش‌آموزان"
+      description="فقط مکالمات شاگردانی را می‌بینی که به پروفایل منتور تو تخصیص داده شده‌اند."
+      threads={threads.map((thread) => ({
+        id: thread.id,
+        title: thread.student_name,
+        subtitle: "دانش‌آموز منتورینگ",
+        meta: (thread.field === "physics" ? "المپیاد فیزیک" : "المپیاد کامپیوتر") + " · " + thread.subject,
+        category: thread.field,
+        avatarLabel: thread.student_name.slice(0, 1),
+        unreadCount: thread.unread_count,
+        lastActivity: thread.last_message_at,
+        status: thread.status,
+      }))}
+      messages={messages}
+      selectedThreadId={selectedId}
+      currentUserType="mentor"
+      draft={draft}
+      onDraftChange={setDraft}
+      onSubmit={send}
+      onSelectThread={setSelectedId}
+      loadingThreads={loading}
+      sending={sending}
+      live={live}
+      isConversationOpen={selected?.status === "open"}
+      error={error}
+      notice={notice}
+      filters={filters}
+      senderLabels={{ student: "دانش‌آموز", admin: "پشتیبانی چکاد", teacher: "مدرس خصوصی" }}
+      emptyThreadsTitle="هنوز شاگردی به تو تخصیص داده نشده"
+      emptyThreadsDescription="پس از تخصیص دانش‌آموز، گفت‌وگوی او در این قسمت قرار می‌گیرد."
+      emptyMessagesTitle="گفت‌وگو را آغاز کن"
+      emptyMessagesDescription="می‌توانی برنامه، تمرین‌ها و نکات آموزشی را با شاگردت مرور کنی."
+      composerPlaceholder="پاسخ خود را برای دانش‌آموز بنویس..."
+      pageActions={
+        <div className="flex flex-wrap gap-2">
+          <Link href="/mentor" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 transition hover:border-slate-400">خانه پنل</Link>
+          <Link href="/mentor/weekly-plan" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 transition hover:border-slate-400">برنامه هفتگی</Link>
+          <Link href="/mentor/reports" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-600 transition hover:border-slate-400">گزارش پیشرفت</Link>
+        </div>
+      }
+    />
+  );
 }

@@ -14,7 +14,7 @@ import {
   type PortalMessage,
   type PortalMessageThread,
 } from "../../../lib/student-auth";
-import { formatPortalDateTime, PortalEmptyState, PortalPageHeading } from "../../../components/student-portal-ui";
+import { MessageCenter } from "../../../components/message-center";
 
 export default function StudentMessagesPage() {
   const [threads, setThreads] = useState<PortalMessageThread[]>([]);
@@ -33,11 +33,13 @@ export default function StudentMessagesPage() {
   const [live, setLive] = useState(false);
 
   const selected = useMemo(() => threads.find((thread) => thread.id === selectedId) || null, [threads, selectedId]);
+
   const loadThreads = useCallback(async () => {
     const result = await fetchStudentMessageThreads();
     setThreads(result.items);
     setSelectedId((current) => current && result.items.some((thread) => thread.id === current) ? current : (result.items[0]?.id ?? null));
   }, []);
+
   const loadMessages = useCallback(async (id: number) => {
     const result = await fetchStudentThreadMessages(id);
     setMessages(result.items);
@@ -57,7 +59,7 @@ export default function StudentMessagesPage() {
       setThreads(threadResult.items);
       setSelectedId(threadResult.items[0]?.id ?? null);
     }).catch((cause) => {
-      if (active) setError(cause instanceof Error ? cause.message : "دریافت گفت‌وگوها انجام نشد.");
+      if (active) setError(cause instanceof Error ? cause.message : "دریافت گفتگوها انجام نشد.");
     }).finally(() => {
       if (active) { setLoading(false); setChecking(false); }
     });
@@ -65,7 +67,10 @@ export default function StudentMessagesPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedId === null) return;
+    if (selectedId === null) {
+      setMessages([]);
+      return;
+    }
     let active = true;
     let socket: WebSocket | null = null;
     let reconnect: number | null = null;
@@ -135,7 +140,7 @@ export default function StudentMessagesPage() {
       setSelectedId(thread.id);
       setNotice(kind === "support" ? "گفت‌وگو با پشتیبانی آماده است." : kind === "advisor" ? "گفت‌وگو با منتور آماده است." : "گفت‌وگو با مدرس آماده است.");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "ساخت گفت‌وگو انجام نشد.");
+      setError(cause instanceof Error ? cause.message : "ساخت گفتگو انجام نشد.");
     } finally {
       setCreating(false);
     }
@@ -159,60 +164,71 @@ export default function StudentMessagesPage() {
     }
   }
 
-  const channelTitle = selected?.channel === "advisor" ? "منتور اختصاصی" : selected?.channel === "teacher" ? "مدرس کلاس خصوصی" : "پشتیبانی چکاد";
+  const filters = [
+    { id: "all", label: "همه" },
+    { id: "unread", label: "خوانده‌نشده" },
+    { id: "advisor", label: "منتورینگ" },
+    { id: "teacher", label: "کلاس خصوصی" },
+    { id: "support", label: "پشتیبانی" },
+  ];
+
   return (
-    <div className="student-portal-page">
-      <PortalPageHeading eyebrow="CHEKAD MESSENGER" title="پیام‌ها" description="گفت‌وگوی مستقیم با پشتیبانی، منتور اختصاصی و مدرس کلاس خصوصی؛ دریافت پیام‌ها در حالت عادی بلادرنگ است." />
-      {error && <div className="student-portal-alert error" role="alert">{error}</div>}
-      {notice && <div className="student-portal-alert success" role="status">{notice}</div>}
-      <div className="student-messenger-layout">
-        <aside className="student-messenger-contacts">
-          <div className="student-messenger-contact-heading"><strong>گفت‌وگوها</strong><span>{threads.length.toLocaleString("fa-IR")}</span></div>
-          <div className="student-messenger-contact-list">
-            {threads.map((thread) => (
-              <button type="button" key={thread.id} className={"student-messenger-contact" + (selectedId === thread.id ? " is-active" : "")} onClick={() => setSelectedId(thread.id)}>
-                <span className="student-messenger-contact-avatar">{thread.channel === "advisor" ? "م" : thread.channel === "teacher" ? "د" : "چ"}</span>
-                <span className="student-messenger-contact-copy"><strong>{thread.subject}</strong><small>{formatPortalDateTime(thread.last_message_at)}</small></span>
-                {(thread.unread_count || 0) > 0 && <b>{thread.unread_count}</b>}
-              </button>
-            ))}
-            {!threads.length && !loading && <p className="student-messenger-no-threads">هنوز گفت‌وگویی شروع نشده است.</p>}
-          </div>
-          <div className="student-messenger-new">
-            <label htmlFor="support-subject">موضوع گفت‌وگو با پشتیبانی</label>
-            <input id="support-subject" value={subject} onChange={(event) => setSubject(event.target.value)} maxLength={140} />
-            <button type="button" className="student-portal-button secondary full" onClick={() => createThread("support")} disabled={creating || subject.trim().length < 3}>{creating ? "در حال آماده‌سازی..." : "گفت‌وگو با پشتیبانی"}</button>
-            <button type="button" className="student-portal-button secondary full" onClick={() => createThread("advisor")} disabled={creating || checking || !advisor.available}>{checking ? "بررسی منتور..." : advisor.available ? "پیام به " + advisor.name : "پس از تخصیص منتور فعال می‌شود"}</button>
-            <button type="button" className="student-portal-button secondary full" onClick={() => createThread("teacher")} disabled={creating || checking || !teacher.available}>{checking ? "بررسی مدرس..." : teacher.available ? "پیام به " + teacher.name : "پس از تخصیص کلاس خصوصی فعال می‌شود"}</button>
-          </div>
-        </aside>
-        <section className="student-messenger-chat">
-          {selected ? <>
-            <header className="student-messenger-chat-header">
-              <div><strong>{selected.subject}</strong><small>{channelTitle} · {selected.status === "open" ? "گفت‌وگوی فعال" : "گفت‌وگوی بسته"}</small></div>
-              <span className="student-messenger-online"><i /> {live ? "اتصال بلادرنگ" : "همگام‌سازی دوره‌ای"}</span>
-            </header>
-            <div className="student-messenger-messages">
-              {messages.map((message) => (
-                <article key={message.id} className={"student-message-row " + (message.sender_type === "student" ? "is-mine" : "is-other")}>
-                  <div className={"student-message-bubble " + (message.sender_type === "student" ? "from-student" : message.sender_type === "mentor" ? "from-mentor" : message.sender_type === "teacher" ? "from-teacher" : "from-admin")}>
-                    {message.sender_type !== "student" && <small className="student-message-sender">{message.sender_type === "mentor" ? "منتور اختصاصی" : message.sender_type === "teacher" ? "مدرس خصوصی" : "پشتیبانی چکاد"}</small>}
-                    <p>{message.body}</p>
-                    <time>{formatPortalDateTime(message.created_at)}</time>
-                  </div>
-                </article>
-              ))}
-              {!messages.length && <PortalEmptyState icon="✉" title="اولین پیام را ارسال کن" description="پیام‌ها در همین صفحه نگهداری و نمایش داده می‌شوند." />}
-            </div>
-            {selected.status === "open" ? (
-              <form className="student-messenger-compose" onSubmit={send}>
-                <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={2} maxLength={4000} placeholder="پیام خود را بنویس..." />
-                <button type="submit" className="student-portal-button primary" disabled={sending || !draft.trim()}>{sending ? "در حال ارسال..." : "ارسال پیام"}</button>
-              </form>
-            ) : <div className="student-messenger-compose-closed">این گفت‌وگو بسته است.</div>}
-          </> : <div className="student-messenger-empty"><strong>{loading ? "در حال بارگذاری..." : "گفت‌وگویی انتخاب نشده است"}</strong><p>از فهرست کناری یک گفت‌وگو را باز کن.</p></div>}
-        </section>
-      </div>
-    </div>
+    <MessageCenter
+      eyebrow="CHEKAD MESSENGER"
+      title="پیام‌رسان چکاد"
+      description="ارتباط مستقیم و متمرکز با منتور، مدرس کلاس خصوصی و تیم پشتیبانی."
+      threads={threads.map((thread) => ({
+        id: thread.id,
+        title: thread.subject,
+        subtitle: thread.channel === "advisor" ? "گفت‌وگو با منتور اختصاصی" : thread.channel === "teacher" ? "گفت‌وگو درباره کلاس خصوصی" : "پشتیبانی چکاد",
+        category: thread.channel,
+        avatarLabel: thread.channel === "advisor" ? "م" : thread.channel === "teacher" ? "د" : "چ",
+        unreadCount: thread.unread_count || 0,
+        lastActivity: thread.last_message_at,
+        status: thread.status,
+      }))}
+      messages={messages}
+      selectedThreadId={selectedId}
+      currentUserType="student"
+      draft={draft}
+      onDraftChange={setDraft}
+      onSubmit={send}
+      onSelectThread={setSelectedId}
+      loadingThreads={loading}
+      sending={sending}
+      live={live}
+      isConversationOpen={selected?.status === "open"}
+      error={error}
+      notice={notice}
+      filters={filters}
+      senderLabels={{ admin: "پشتیبانی چکاد", mentor: "منتور اختصاصی", teacher: "مدرس خصوصی" }}
+      emptyThreadsTitle="هنوز گفت‌وگویی شروع نکرده‌ای"
+      emptyThreadsDescription="از پایین این فهرست، با پشتیبانی یا یکی از همراهان آموزشی خود گفتگو را آغاز کن."
+      emptyMessagesTitle="این گفتگو آماده است"
+      emptyMessagesDescription="پیامت را بنویس تا ارتباط با همراه آموزشی‌ات شروع شود."
+      composerPlaceholder="پیام خود را بنویس..."
+      sidebarFooter={
+        <div className="grid gap-2">
+          <strong className="mb-1 text-[11px] font-black text-slate-700">شروع گفت‌وگوی تازه</strong>
+          <label htmlFor="support-subject" className="text-[9px] font-bold text-slate-500">موضوع پیام به پشتیبانی</label>
+          <input
+            id="support-subject"
+            value={subject}
+            onChange={(event) => setSubject(event.target.value)}
+            maxLength={140}
+            className="min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[10px] text-slate-700 outline-none transition focus:border-slate-400"
+          />
+          <button type="button" className="w-full rounded-xl bg-[#173b59] px-3 py-2.5 text-[10px] font-extrabold text-white transition hover:bg-[#234f70] disabled:cursor-not-allowed disabled:opacity-50" onClick={() => createThread("support")} disabled={creating || subject.trim().length < 3}>
+            {creating ? "در حال آماده‌سازی..." : "پیام به پشتیبانی"}
+          </button>
+          <button type="button" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-[10px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-45" onClick={() => createThread("advisor")} disabled={creating || checking || !advisor.available}>
+            {checking ? "بررسی منتور..." : advisor.available ? "پیام به " + advisor.name : "پس از تخصیص منتور فعال می‌شود"}
+          </button>
+          <button type="button" className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-right text-[10px] font-bold text-slate-700 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-45" onClick={() => createThread("teacher")} disabled={creating || checking || !teacher.available}>
+            {checking ? "بررسی مدرس..." : teacher.available ? "پیام به " + teacher.name : "پس از تخصیص کلاس خصوصی فعال می‌شود"}
+          </button>
+        </div>
+      }
+    />
   );
 }
