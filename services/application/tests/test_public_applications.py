@@ -386,3 +386,47 @@ def test_admin_inbox_status_and_internal_notes(client, db_session):
         assert refreshed.json()["internal_notes"][0]["content"] == "تماس اولیه انجام شود"
     finally:
         app.dependency_overrides.pop(require_admin, None)
+
+
+def test_idempotency_key_returns_original_application_and_rejects_changed_payload(client, db_session):
+    headers = {**same_origin_headers(), "Idempotency-Key": "retry-safe-request-000001"}
+    payload = {
+        **valid_common_payload(),
+        "level": "در حال مطالعه",
+        "goal": "برنامه‌ریزی",
+    }
+
+    first = client.post("/mentorship-applications", json=payload, headers=headers)
+    retry = client.post("/mentorship-applications", json=payload, headers=headers)
+
+    assert first.status_code == 201
+    assert retry.status_code == 200
+    assert retry.json()["request_id"] == first.json()["request_id"]
+    assert db_session.query(MentorshipApplication).count() == 1
+
+    changed = client.post(
+        "/mentorship-applications",
+        json={**payload, "goal": "هدف متفاوت"},
+        headers=headers,
+    )
+    assert changed.status_code == 409
+    assert db_session.query(MentorshipApplication).count() == 1
+
+
+def test_idempotency_key_is_scoped_to_application_type(client, db_session, monkeypatch):
+    headers = {**same_origin_headers(), "Idempotency-Key": "cross-type-request-00001"}
+    mentorship = client.post(
+        "/mentorship-applications",
+        json={**valid_common_payload(), "level": "در حال مطالعه"},
+        headers=headers,
+    )
+    monkeypatch.setitem(AUTHENTICATED_STUDENT, "field", "physics")
+    tutoring = client.post(
+        "/tutoring-applications",
+        json={**valid_common_payload(), "topic": "مکانیک"},
+        headers=headers,
+    )
+    assert mentorship.status_code == 201
+    assert tutoring.status_code == 201
+    assert db_session.query(MentorshipApplication).count() == 1
+    assert db_session.query(TutoringApplication).count() == 1

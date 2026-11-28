@@ -821,9 +821,13 @@ def require_portal_same_origin(request: Request) -> None:
         or parsed.username or parsed.password
     ):
         raise HTTPException(403, "مبدأ درخواست معتبر نیست.")
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
-    expected = scheme.lower() + "://" + host.lower()
+    configured = urlsplit(settings.public_site_origin.strip())
+    if configured.scheme and configured.netloc:
+        expected = configured.scheme.lower() + "://" + configured.netloc.lower()
+    else:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        expected = scheme.lower() + "://" + host.lower()
     received = parsed.scheme.lower() + "://" + parsed.netloc.lower()
     if received != expected:
         raise HTTPException(403, "درخواست باید از همان وب‌سایت ارسال شود.")
@@ -1620,7 +1624,19 @@ async def create_assignment(
         models.MentorshipApplication if payload.kind == "mentorship"
         else models.TutoringApplication
     )
-    application = db.query(application_model).filter_by(id=payload.application_id).first()
+    # Serialize decisions for one application and one provider. PostgreSQL
+    # advisory locks prevent concurrent assignments from oversubscribing capacity.
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        lock_material = f"{payload.kind}:{payload.person_id}".encode("utf-8")
+        lock_key = int.from_bytes(hashlib.sha256(lock_material).digest()[:8], "big", signed=True)
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+
+    application = (
+        db.query(application_model)
+        .filter_by(id=payload.application_id)
+        .with_for_update()
+        .first()
+    )
     if application is None:
         raise HTTPException(404, "درخواست پیدا نشد.")
     if application.status in {"rejected", "cancelled", "completed"}:

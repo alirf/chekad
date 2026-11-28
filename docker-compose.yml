@@ -116,6 +116,7 @@ services:
       JWT_ISSUER: ${JWT_ISSUER:-chekad-auth}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-chekad-admin}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      PUBLIC_SITE_ORIGIN: ${PUBLIC_SITE_ORIGIN:-http://localhost:8080}
       STUDENT_REGISTRATION_ENABLED: ${STUDENT_REGISTRATION_ENABLED:-false}
       APP_ENV: ${APP_ENV:-development}
       PEOPLE_INTERNAL_URL: http://people-service:8000

@@ -246,7 +246,7 @@ def test_admin_assignment_creates_sessions_and_restricted_advisor_chat(client, d
     application = MentorshipApplication(
         student_id=student_profile.id,
         field="physics",
-        status="reviewing",
+        status="accepted",
         student_note="برنامه‌ریزی و پیگیری",
     )
     db_session.add(application)

@@ -130,7 +130,14 @@ export default function StudentDashboardPage() {
       label: "مشاهده همکاری",
       href: "/dashboard/classes",
     };
-  } else if (latestApplication && ["new", "reviewing", "accepted"].includes(latestApplication.status)) {
+  } else if (latestApplication && latestApplication.status === "accepted") {
+    nextStep = {
+      eyebrow: "STUDENT CONFIRMED",
+      title: "انتخابت تأیید شده است",
+      description: "تیم چکاد در حال نهایی‌کردن تخصیص منتور یا مدرس و زمان‌بندی همکاری است. پیام‌های پنل را برای هماهنگی دنبال کن.",
+      label: "پیگیری هماهنگی", href: "/dashboard/messages",
+    };
+  } else if (latestApplication && ["new", "reviewing"].includes(latestApplication.status)) {
     nextStep = {
       eyebrow: "REQUEST IN PROGRESS",
       title: latestApplication.status === "new" ? "درخواستت دریافت شده است" : "درخواستت در حال پیگیری است",

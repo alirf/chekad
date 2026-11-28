@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit
+
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +19,7 @@ class Settings(BaseSettings):
 
     app_env: str = "development"
     auth_cookie_secure: bool = False
+    public_site_origin: str = "http://localhost:8080"
     student_registration_enabled: bool = False
 
     @model_validator(mode="after")

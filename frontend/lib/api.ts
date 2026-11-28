@@ -53,6 +53,35 @@ export class ApiError extends Error {
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || "/api").replace(/\/$/, "");
 
+const pendingApplicationKeys = new Map<string, string>();
+
+async function applicationIdempotencyKey(kind: "mentorship" | "tutoring", payload: PublicApplicationPayload) {
+  const canonical = JSON.stringify({ kind, payload });
+  let fingerprint: string;
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+    fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  } catch {
+    let hash = 2166136261;
+    for (let index = 0; index < canonical.length; index += 1) {
+      hash = Math.imul(hash ^ canonical.charCodeAt(index), 16777619);
+    }
+    fingerprint = "fallback-" + (hash >>> 0).toString(16);
+  }
+  const storageKey = "chekad:application-idempotency:" + fingerprint;
+  let key = pendingApplicationKeys.get(storageKey);
+  try { key = key || window.sessionStorage.getItem(storageKey) || undefined; } catch { /* storage disabled */ }
+  if (!key) {
+    key = typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : "idem-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 16);
+    pendingApplicationKeys.set(storageKey, key);
+    try { window.sessionStorage.setItem(storageKey, key); } catch { /* in-memory fallback */ }
+  }
+  return { key, storageKey };
+}
+
+
 export async function fetchPublicPeople(
   kind: PeopleKind,
   field?: OlympiadField,
@@ -110,6 +139,7 @@ export async function submitPublicApplication(
     kind === "mentorship"
       ? "/application/mentorship-applications"
       : "/application/tutoring-applications";
+  const idempotency = await applicationIdempotencyKey(kind, payload);
 
   let response: Response;
   try {
@@ -119,6 +149,7 @@ export async function submitPublicApplication(
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
+        "Idempotency-Key": idempotency.key,
       },
       body: JSON.stringify(payload),
     });
@@ -166,6 +197,8 @@ export async function submitPublicApplication(
     throw new ApiError("ساختار پاسخ سرور معتبر نیست؛ وضعیت ثبت درخواست را پیگیری کنید.", "invalid-response");
   }
 
+  pendingApplicationKeys.delete(idempotency.storageKey);
+  try { window.sessionStorage.removeItem(idempotency.storageKey); } catch { /* storage disabled */ }
   return result as PublicApplicationResult;
 }
 

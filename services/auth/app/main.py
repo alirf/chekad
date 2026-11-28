@@ -380,15 +380,20 @@ def set_mentor_cookie(response: Response, mentor: MentorUser) -> int:
 def require_admin_same_origin(request: Request) -> None:
     origin = request.headers.get("origin")
     parsed = urlsplit(origin or "")
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+    configured = urlsplit(settings.public_site_origin.strip())
+    if configured.scheme and configured.netloc:
+        expected_origin = f"{configured.scheme}://{configured.netloc}".lower()
+    else:
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+        scheme = request.headers.get("x-forwarded-proto") or request.url.scheme
+        expected_origin = f"{scheme}://{host}".lower()
     if (
         parsed.scheme not in {"http", "https"}
         or not parsed.netloc
         or parsed.path not in ("", "/")
         or parsed.query or parsed.fragment
         or parsed.username or parsed.password
-        or f"{parsed.scheme}://{parsed.netloc}".lower() != f"{scheme}://{host}".lower()
+        or f"{parsed.scheme}://{parsed.netloc}".lower() != expected_origin
     ):
         raise HTTPException(403, "مبدأ درخواست مدیریتی معتبر نیست.")
 

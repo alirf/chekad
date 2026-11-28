@@ -45,7 +45,7 @@ export default function AdminAssignmentsPage() {
     ).length;
     return person.status === "active" && person.is_public && activeLoad < person.capacity;
   }), [people, assignments, kind]);
-  const openApplications = useMemo(() => applications.filter((app) => app.kind === kind && !["rejected", "cancelled", "completed"].includes(app.status)), [applications, kind]);
+  const openApplications = useMemo(() => applications.filter((app) => app.kind === kind && app.status === "accepted"), [applications, kind]);
 
   const load = useCallback(async () => {
     const [appData, mentorData, tutorData, assignmentData] = await Promise.all([
@@ -124,7 +124,7 @@ export default function AdminAssignmentsPage() {
 
   return (
     <div className="space-y-5">
-      <div><p className="text-xs font-bold tracking-widest text-blue-600">SERVICE ASSIGNMENTS</p><h1 className="mt-1 text-2xl font-black text-slate-900">تخصیص منتور و مدرس</h1><p className="mt-1 text-sm text-slate-500">درخواست تأییدشده را به پروفایل فعال متناسب با رشته وصل و جلسه‌های آن را زمان‌بندی کن.</p></div>
+      <div><p className="text-xs font-bold tracking-widest text-blue-600">SERVICE ASSIGNMENTS</p><h1 className="mt-1 text-2xl font-black text-slate-900">تخصیص منتور و مدرس</h1><p className="mt-1 text-sm text-slate-500">پس از آن‌که دانش‌آموز پیشنهادها را در پیام‌رسان بررسی و انتخابش را تأیید کرد، درخواست پذیرفته‌شده را به منتور یا مدرس متناسب وصل کن.</p></div>
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
       {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">{notice}</div>}
       <form onSubmit={submit} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -133,8 +133,8 @@ export default function AdminAssignmentsPage() {
           <label className="grid gap-1 text-xs font-bold text-slate-600">نوع خدمت
             <select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setApplicationId(""); setPersonId(""); }} className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm"><option value="mentorship">منتورینگ</option><option value="tutoring">کلاس خصوصی</option></select>
           </label>
-          <label className="grid gap-1 text-xs font-bold text-slate-600">درخواست دانش‌آموز
-            <select value={applicationId} onChange={(event) => { setApplicationId(event.target.value); setPersonId(""); }} required className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm"><option value="">انتخاب درخواست</option>{openApplications.map((app) => <option key={app.kind + app.id} value={app.id}>#{app.id} · {app.student.first_name} {app.student.last_name} · {app.field === "physics" ? "فیزیک" : "کامپیوتر"} · {app.tracking_code}</option>)}</select>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">درخواست تأییدشده توسط دانش‌آموز
+            <select value={applicationId} onChange={(event) => { setApplicationId(event.target.value); setPersonId(""); }} required className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm"><option value="">انتخاب درخواست پذیرفته‌شده</option>{openApplications.map((app) => <option key={app.kind + app.id} value={app.id}>#{app.id} · {app.student.first_name} {app.student.last_name} · {app.field === "physics" ? "فیزیک" : "کامپیوتر"} · {app.tracking_code}</option>)}</select>
           </label>
           <label className="grid gap-1 text-xs font-bold text-slate-600 md:col-span-2">{kind === "mentorship" ? "منتور" : "مدرس"}
             <select value={personId} onChange={(event) => setPersonId(event.target.value)} required className="min-h-11 rounded-lg border border-slate-200 px-3 text-sm"><option value="">انتخاب فرد فعال و عمومی</option>{filteredPeople.filter((person) => !applicationId || person.field === openApplications.find((app) => app.id === Number(applicationId))?.field).map((person) => <option key={person.id} value={person.id}>#{person.id} · {person.first_name} {person.last_name} · ظرفیت {assignments.filter((assignment) => assignment.kind === kind && assignment.person_id === person.id && assignment.status === "active").length}/{person.capacity}</option>)}</select>
