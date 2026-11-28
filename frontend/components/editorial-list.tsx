@@ -17,6 +17,7 @@ type EditorialItem = {
   duration_minutes?: number;
   registration_url?: string;
   cover_image_url?: string;
+  published_at?: string | null;
   status: string;
 };
 
@@ -37,10 +38,18 @@ function formatExamDate(value?: string) {
   }).format(date);
 }
 
+function formatArticleDate(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium" }).format(date);
+}
+
 export function EditorialList({ kind }: { kind: "articles" | "exams" }) {
   const [items, setItems] = useState<EditorialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("همه مطالب");
 
   useEffect(() => {
     let active = true;
@@ -70,7 +79,7 @@ export function EditorialList({ kind }: { kind: "articles" | "exams" }) {
   if (loading) {
     return kind === "exams"
       ? <div className="exam-list-loading" role="status">در حال دریافت فهرست آزمون‌ها...</div>
-      : <p className="text-sm text-slate-500">در حال دریافت اطلاعات...</p>;
+      : <div className="blog-list-loading" role="status">در حال آماده‌کردن مجله چکاد...</div>;
   }
 
   if (failed) {
@@ -87,7 +96,7 @@ export function EditorialList({ kind }: { kind: "articles" | "exams" }) {
       <EmptyState
         title={kind === "articles" ? "هنوز مقاله‌ای منتشر نشده است" : "در حال حاضر آزمون منتشرشده‌ای وجود ندارد"}
         description={kind === "articles"
-          ? "به محض انتشار مقاله، آن را در این بخش می‌بینی."
+          ? "با انتشار نخستین مطلب، مقاله‌ها و راهنماهای چکاد در این بخش نمایش داده می‌شوند."
           : "با انتشار آزمون فیزیک یا کامپیوتر، عنوان و وضعیت آن در این بخش نمایش داده می‌شود."}
       />
     );
@@ -135,19 +144,74 @@ export function EditorialList({ kind }: { kind: "articles" | "exams" }) {
     );
   }
 
+  const categories = ["همه مطالب", ...Array.from(new Set(items.map((item) => item.category?.trim()).filter((value): value is string => Boolean(value)))];
+  const visibleArticles = selectedCategory === "همه مطالب"
+    ? items
+    : items.filter((item) => (item.category?.trim() || "عمومی") === selectedCategory);
+  const featuredArticle = visibleArticles[0];
+  const remainingArticles = visibleArticles.slice(1);
+
   return (
-    <div className="editorial-grid">
-      {items.map((item) => (
-        <article className="editorial-card" key={item.id}>
-          {item.cover_image_url ? <img className="editorial-cover" src={item.cover_image_url} alt="" loading="lazy" /> : <div className="editorial-cover" aria-hidden="true" />}
-          <div className="editorial-card-body">
-            <span className="editorial-meta">{item.category}</span>
-            <h2>{item.title}</h2>
-            <p>{item.excerpt || item.description || (item.stage ? item.stage + " · " + item.starts_at : "")}</p>
-            <Link className="text-link" href={"/blog/" + item.slug}>ادامه مقاله ←</Link>
+    <div className="blog-editorial-list">
+      <div className="blog-filter-bar" aria-label="فیلتر دسته‌بندی مقاله‌ها">
+        <span className="blog-filter-label">دسته‌بندی</span>
+        <div className="blog-filter-options">
+          {categories.map((category) => (
+            <button
+              type="button"
+              key={category}
+              className={"blog-filter-chip" + (selectedCategory === category ? " is-active" : "")}
+              aria-pressed={selectedCategory === category}
+              onClick={() => setSelectedCategory(category)}
+            >
+              {category}
+              {category === "همه مطالب" ? <span>{items.length.toLocaleString("fa-IR")}</span> : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {featuredArticle ? (
+        <article className="blog-featured-card">
+          {featuredArticle.cover_image_url
+            ? <img className="blog-featured-image" src={featuredArticle.cover_image_url} alt="" loading="lazy" />
+            : <div className="blog-featured-art" aria-hidden="true"><span>چ</span><small>CHEKAD · JOURNAL</small><i /><b>01</b></div>}
+          <div className="blog-featured-content">
+            <div className="blog-article-meta">
+              <span className="blog-category-chip">{featuredArticle.category?.trim() || "یادداشت"}</span>
+              {formatArticleDate(featuredArticle.published_at) ? <time>{formatArticleDate(featuredArticle.published_at)}</time> : null}
+            </div>
+            <span className="blog-featured-label">پیشنهاد مجله</span>
+            <h2><Link href={"/blog/" + featuredArticle.slug}>{featuredArticle.title}</Link></h2>
+            <p>{featuredArticle.excerpt || featuredArticle.description || "برای آشنایی با محتوای این مطلب، ادامه آن را بخوان."}</p>
+            <Link className="blog-read-link" href={"/blog/" + featuredArticle.slug}>مطالعه مقاله <b>←</b></Link>
           </div>
         </article>
-      ))}
+      ) : null}
+
+      {remainingArticles.length ? (
+        <div className="blog-article-grid">
+          {remainingArticles.map((item) => (
+            <article className="blog-article-card" key={item.id}>
+              {item.cover_image_url
+                ? <img className="blog-article-image" src={item.cover_image_url} alt="" loading="lazy" />
+                : <div className="blog-article-art" aria-hidden="true"><span>چ</span><small>CHEKAD JOURNAL</small></div>}
+              <div className="blog-article-body">
+                <div className="blog-article-meta">
+                  <span className="blog-category-chip">{item.category?.trim() || "یادداشت"}</span>
+                  {formatArticleDate(item.published_at) ? <time>{formatArticleDate(item.published_at)}</time> : null}
+                </div>
+                <h3><Link href={"/blog/" + item.slug}>{item.title}</Link></h3>
+                <p>{item.excerpt || item.description || "برای آشنایی با محتوای این مطلب، ادامه آن را بخوان."}</p>
+                <Link className="blog-read-link" href={"/blog/" + item.slug}>ادامه مطالعه <b>←</b></Link>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : visibleArticles.length === 1 ? (
+        <div className="blog-single-article-note">در این دسته‌بندی فعلاً همین یک مطلب منتشر شده است.</div>
+      ) : null}
+      <p className="blog-result-count" aria-live="polite">{visibleArticles.length.toLocaleString("fa-IR")} مطلب در این فهرست</p>
     </div>
   );
 }
