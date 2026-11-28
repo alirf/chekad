@@ -83,6 +83,30 @@ class AdminApplicationStatusUpdate(BaseModel):
     reject_reason: str | None = Field(default=None, max_length=1000)
 
 
+
+class AdminApplicationOfferCreate(BaseModel):
+    person_id: int = Field(ge=1)
+    description: str = Field(min_length=10, max_length=1200)
+    price_toman: int | None = Field(default=None, ge=0, le=1_000_000_000_000)
+    terms: str = Field(min_length=3, max_length=1600)
+    expires_at: datetime | None = None
+
+    @field_validator("description", "terms")
+    @classmethod
+    def clean_offer_text(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 3:
+            raise ValueError("جزئیات پیشنهاد معتبر نیست.")
+        return value
+
+    @field_validator("expires_at")
+    @classmethod
+    def require_offer_expiry_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("زمان انقضای پیشنهاد باید همراه منطقه زمانی باشد.")
+        return value
+
+
 class InternalNoteCreate(BaseModel):
     content: str = Field(min_length=1, max_length=2000)
 

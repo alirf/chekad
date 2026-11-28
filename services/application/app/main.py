@@ -17,6 +17,7 @@ from app.db import engine, get_db
 from app import models
 from app.schemas import (
     AdminApplicationStatusUpdate,
+    AdminApplicationOfferCreate,
     AdminAssignmentCreate,
     AdminAssignmentStatusUpdate,
     AdminInvoiceStatusUpdate,
@@ -535,6 +536,112 @@ def student_applications(
 
     items.sort(key=lambda item: (item["created_at"], item["id"]), reverse=True)
     return {"items": items, "total": len(items)}
+
+
+
+@app.get("/student/application-offers")
+def student_application_offers(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        return {"items": [], "total": 0}
+    now = utcnow()
+    items = []
+    for kind, application_model in (
+        ("mentorship", models.MentorshipApplication),
+        ("tutoring", models.TutoringApplication),
+    ):
+        applications = {
+            row.id: row for row in db.query(application_model).filter_by(
+                student_id=profile.id, status="options_proposed"
+            ).all()
+        }
+        if not applications:
+            continue
+        offers = (
+            db.query(models.ApplicationOffer)
+            .filter(
+                models.ApplicationOffer.application_kind == kind,
+                models.ApplicationOffer.application_id.in_(list(applications.keys())),
+                models.ApplicationOffer.status == "proposed",
+                or_(models.ApplicationOffer.expires_at.is_(None), models.ApplicationOffer.expires_at > now),
+            )
+            .order_by(models.ApplicationOffer.created_at.asc(), models.ApplicationOffer.id.asc())
+            .all()
+        )
+        for offer in offers:
+            application = applications[offer.application_id]
+            items.append({
+                "id": offer.id,
+                "kind": kind,
+                "application_id": application.id,
+                "tracking_code": f"CH-{application.id:06d}",
+                "application_title": "درخواست منتورینگ" if kind == "mentorship" else "درخواست کلاس خصوصی",
+                "field": application.field,
+                "topic": getattr(application, "topic", None),
+                "person_id": offer.person_id,
+                "person_name": offer.person_name,
+                "description": offer.description,
+                "price_toman": offer.price_toman,
+                "terms": offer.terms,
+                "expires_at": offer.expires_at,
+                "created_at": offer.created_at,
+            })
+    items.sort(key=lambda item: (item["created_at"], item["id"]), reverse=True)
+    return {"items": items, "total": len(items)}
+
+
+@app.post("/student/application-offers/{offer_id}/select")
+def select_application_offer(
+    offer_id: int,
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        raise HTTPException(404, "پروفایل دانش‌آموز پیدا نشد.")
+    offer = db.query(models.ApplicationOffer).filter_by(id=offer_id).with_for_update().first()
+    if offer is None or offer.status != "proposed":
+        raise HTTPException(404, "این پیشنهاد دیگر در دسترس نیست.")
+    application_model = _model_for(offer.application_kind)
+    application = (
+        db.query(application_model)
+        .filter_by(id=offer.application_id, student_id=profile.id)
+        .with_for_update()
+        .first()
+    )
+    if application is None:
+        raise HTTPException(404, "درخواست متعلق به حساب شما نیست.")
+    if application.status != "options_proposed":
+        raise HTTPException(409, "این درخواست در وضعیت انتخاب پیشنهاد قرار ندارد.")
+    if offer.expires_at is not None and offer.expires_at <= utcnow():
+        offer.status = "expired"
+        db.commit()
+        raise HTTPException(410, "مهلت انتخاب این پیشنهاد به پایان رسیده است.")
+    offer.status = "selected"
+    offer.selected_at = utcnow()
+    db.query(models.ApplicationOffer).filter(
+        models.ApplicationOffer.application_kind == offer.application_kind,
+        models.ApplicationOffer.application_id == offer.application_id,
+        models.ApplicationOffer.id != offer.id,
+        models.ApplicationOffer.status == "proposed",
+    ).update({"status": "withdrawn"}, synchronize_session=False)
+    application.status = "accepted"
+    _notify_student(
+        db, student["id"], "application", "انتخاب همراه آموزشی ثبت شد",
+        "انتخاب «" + offer.person_name + "» ثبت شد. تیم چکاد تخصیص و زمان‌بندی را نهایی می‌کند.",
+        "/dashboard/classes", f"application-offer:{offer.id}:selected",
+    )
+    try:
+        db.commit()
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ثبت انتخاب انجام نشد. دوباره تلاش کنید.") from exc
+    return {"selected": True, "offer_id": offer.id, "application_id": application.id, "status": application.status}
 
 
 @app.get("/student/notifications")
@@ -1609,6 +1716,79 @@ async def mentor_send_message(
     return serialized
 
 
+
+@app.post("/admin/applications/{kind}/{application_id}/offers", status_code=201)
+async def create_application_offer(
+    kind: str,
+    application_id: int,
+    payload: AdminApplicationOfferCreate,
+    request: Request,
+    admin: dict = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    require_same_origin(request)
+    application_model = _model_for(kind)
+    application = (
+        db.query(application_model)
+        .options(joinedload(application_model.student))
+        .filter_by(id=application_id)
+        .with_for_update()
+        .first()
+    )
+    if application is None:
+        raise HTTPException(404, "درخواست پیدا نشد.")
+    if application.status not in {"new", "reviewing", "waiting_for_student", "options_proposed"}:
+        raise HTTPException(409, "برای این درخواست در وضعیت فعلی امکان پیشنهاد گزینه وجود ندارد.")
+    if payload.expires_at is not None and payload.expires_at <= utcnow():
+        raise HTTPException(422, "زمان انقضای پیشنهاد باید در آینده باشد.")
+    person = await fetch_public_person(kind, payload.person_id)
+    if person["field"] != application.field:
+        raise HTTPException(422, "رشته منتور یا مدرس با درخواست دانش‌آموز مطابقت ندارد.")
+    existing = db.query(models.ApplicationOffer).filter_by(
+        application_kind=kind, application_id=application.id, person_id=payload.person_id
+    ).first()
+    if existing is not None:
+        if existing.status == "selected":
+            raise HTTPException(409, "این درخواست قبلاً یک پیشنهاد انتخاب‌شده دارد.")
+        raise HTTPException(409, "این فرد قبلاً برای این درخواست پیشنهاد شده است.")
+    person_name = (person.get("first_name", "") + " " + person.get("last_name", "")).strip()[:180]
+    offer = models.ApplicationOffer(
+        application_kind=kind,
+        application_id=application.id,
+        person_id=payload.person_id,
+        person_name=person_name or "همراه آموزشی",
+        field=application.field,
+        description=payload.description,
+        price_toman=payload.price_toman,
+        terms=payload.terms,
+        expires_at=payload.expires_at,
+        status="proposed",
+        created_by_admin_id=admin["id"],
+    )
+    db.add(offer)
+    application.status = "options_proposed"
+    _notify_student(
+        db, application.student.auth_student_id if application.student else None,
+        "application", "پیشنهاد همراه آموزشی آماده بررسی است",
+        "گزینه «" + offer.person_name + "» برای درخواست شما آماده انتخاب است. جزئیات را در پنل بررسی کنید.",
+        "/dashboard/requests", f"application-offer:{kind}:{application.id}:{payload.person_id}:proposed",
+    )
+    try:
+        db.commit()
+        db.refresh(offer)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "این گزینه هم‌زمان برای درخواست ثبت شده است.") from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ثبت پیشنهاد انجام نشد.") from exc
+    return {
+        "id": offer.id, "kind": kind, "application_id": application.id,
+        "person_id": offer.person_id, "person_name": offer.person_name,
+        "status": offer.status, "created_at": offer.created_at,
+    }
+
+
 @app.post("/admin/assignments", status_code=201)
 async def create_assignment(
     payload: AdminAssignmentCreate,
@@ -1646,6 +1826,14 @@ async def create_assignment(
         )
     if application.field != person["field"]:
         raise HTTPException(422, "رشته منتور یا مدرس با رشته درخواست مطابقت ندارد.")
+    selected_offer = db.query(models.ApplicationOffer).filter_by(
+        application_kind=payload.kind,
+        application_id=payload.application_id,
+        person_id=payload.person_id,
+        status="selected",
+    ).first()
+    if selected_offer is None:
+        raise HTTPException(409, "تخصیص باید دقیقاً مطابق گزینه‌ای باشد که دانش‌آموز انتخاب کرده است.")
 
     assignment_model = (
         models.MentorAssignment if payload.kind == "mentorship"

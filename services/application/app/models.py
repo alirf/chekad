@@ -142,6 +142,33 @@ class TutoringApplication(Base):
     student = relationship("Student")
 
 
+
+class ApplicationOffer(Base):
+    """A structured mentor/tutor option explicitly offered to one application."""
+
+    __tablename__ = "application_offers"
+    __table_args__ = (
+        UniqueConstraint("application_kind", "application_id", "person_id", name="uq_application_offers_application_person"),
+        Index("ix_application_offers_application", "application_kind", "application_id"),
+        Index("ix_application_offers_status_expiry", "status", "expires_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    application_kind = Column(String(20), nullable=False)  # mentorship|tutoring
+    application_id = Column(Integer, nullable=False, index=True)
+    person_id = Column(Integer, nullable=False, index=True)  # cross-service → people-service
+    person_name = Column(String(180), nullable=False)
+    field = Column(String(20), nullable=False)
+    description = Column(Text, nullable=False)
+    price_toman = Column(BigInteger, nullable=True)
+    terms = Column(Text, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(String(20), nullable=False, default="proposed", index=True)
+    created_by_admin_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    selected_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class TutorAssignment(Base):
     __tablename__ = "tutor_assignments"
     __table_args__ = (
