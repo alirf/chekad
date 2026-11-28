@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
 
 from app.db import Base
 
@@ -33,12 +33,30 @@ class StudentUser(Base):
     field = Column(String(24), nullable=False)
     guardian_phone = Column(String(16), nullable=False)
     guardian_consent = Column(Boolean, nullable=False, default=False)
-    guardian_consent_at = Column(DateTime(timezone=True), nullable=False)
+    guardian_consent_at = Column(DateTime(timezone=True), nullable=True)
     privacy_accepted_at = Column(DateTime(timezone=True), nullable=False)
     phone_verified = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class StudentVerificationCode(Base):
+    __tablename__ = "student_verification_codes"
+    __table_args__ = (
+        Index("ix_student_verification_codes_student_purpose", "student_id", "purpose"),
+        Index("ix_student_verification_codes_created_at", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("student_users.id", ondelete="CASCADE"), nullable=False)
+    purpose = Column(String(32), nullable=False)  # student_phone|guardian_consent
+    destination_phone = Column(String(16), nullable=False)
+    code_hash = Column(String(64), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    attempts = Column(Integer, nullable=False, default=0)
+    consumed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class MentorUser(Base):

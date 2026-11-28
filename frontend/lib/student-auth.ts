@@ -10,7 +10,10 @@ export interface StudentProfile {
   grade: StudentGrade;
   field: OlympiadField;
   phone_verified: boolean;
+  guardian_consent: boolean;
 }
+
+export type StudentVerificationPurpose = "student_phone" | "guardian_consent";
 
 export interface StudentRegisterPayload {
   first_name: string;
@@ -145,6 +148,29 @@ export async function loginStudent(phone: string, password: string) {
 
 export async function fetchStudentProfile() {
   return requestJson<StudentProfile>("/auth/student/me");
+}
+
+export async function verifyStudentCode(purpose: StudentVerificationPurpose, code: string) {
+  return requestJson<{
+    student: StudentProfile;
+    fully_verified: boolean;
+    verified_purpose: StudentVerificationPurpose;
+  }>("/auth/student/verification/confirm", {
+    method: "POST",
+    body: JSON.stringify({ purpose, code }),
+  });
+}
+
+export async function resendStudentVerification(purpose: StudentVerificationPurpose) {
+  return requestJson<{
+    sent: boolean;
+    purpose: StudentVerificationPurpose;
+    expires_in: number;
+    destination: string;
+  }>("/auth/student/verification/resend", {
+    method: "POST",
+    body: JSON.stringify({ purpose }),
+  });
 }
 
 export async function fetchStudentServices() {

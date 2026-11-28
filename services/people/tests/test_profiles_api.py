@@ -40,6 +40,17 @@ def client():
     return TestClient(app)
 
 
+def test_health_readiness_fails_when_database_is_unavailable(monkeypatch):
+    def unavailable():
+        raise OSError("database unavailable")
+
+    monkeypatch.setattr("app.main.engine.connect", unavailable)
+    c = client()
+    assert c.get("/health/live").status_code == 200
+    assert c.get("/health/ready").status_code == 503
+    assert c.get("/health").status_code == 503
+
+
 def test_admin_profile_api_requires_authentication():
     assert client().get("/admin/mentors").status_code == 401
 

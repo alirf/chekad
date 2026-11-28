@@ -125,7 +125,11 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
   }, [announceSessionChange, commitSession]);
 
   useEffect(() => {
-    if (session.status === "authenticated") {
+    if (
+      session.status === "authenticated" &&
+      session.student.phone_verified &&
+      session.student.guardian_consent
+    ) {
       void recordStudentActivity("session_started").catch(() => undefined);
     }
   }, [session.status]);

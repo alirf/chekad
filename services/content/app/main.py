@@ -56,19 +56,23 @@ async def require_admin(request: Request) -> dict:
     return admin
 
 
-def health_payload():
-    db_status = "ok"
+@app.get("/health/live")
+def health_live():
+    return {"status": "ok", "service": settings.service_name}
+
+
+@app.get("/health/ready")
+@app.get("/health")
+def health_ready():
     try:
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
     except Exception as exc:
-        db_status = f"error:{exc.__class__.__name__}"
-    return {"status": "ok", "service": settings.service_name, "db": db_status}
-
-
-@app.get("/health")
-def health():
-    return health_payload()
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "service": settings.service_name, "dependency": "database"},
+        ) from exc
+    return {"status": "ok", "service": settings.service_name, "db": "ok"}
 
 
 class PageInput(BaseModel):
@@ -380,6 +384,8 @@ async def require_student(request: Request) -> dict:
         or student.get("field") not in {"physics", "computer"}
     ):
         raise HTTPException(503, "اطلاعات حساب دانش‌آموزی کامل نیست.")
+    if student.get("phone_verified") is not True or student.get("guardian_consent") is not True:
+        raise HTTPException(403, "برای شرکت در آزمون، تأیید شماره و رضایت سرپرست را تکمیل کنید.")
     return student
 
 

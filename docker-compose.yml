@@ -118,6 +118,14 @@ services:
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       PUBLIC_SITE_ORIGIN: ${PUBLIC_SITE_ORIGIN:-http://localhost:8080}
       STUDENT_REGISTRATION_ENABLED: ${STUDENT_REGISTRATION_ENABLED:-false}
+      OTP_HASH_SECRET: ${OTP_HASH_SECRET:-}
+      SMS_PROVIDER: ${SMS_PROVIDER:-console}
+      SMS_GATEWAY_URL: ${SMS_GATEWAY_URL:-}
+      SMS_GATEWAY_TOKEN: ${SMS_GATEWAY_TOKEN:-}
+      SMS_SENDER_ID: ${SMS_SENDER_ID:-}
+      SMS_CODE_TTL_SECONDS: ${SMS_CODE_TTL_SECONDS:-300}
+      SMS_RESEND_COOLDOWN_SECONDS: ${SMS_RESEND_COOLDOWN_SECONDS:-60}
+      SMS_MAX_DAILY_SENDS: ${SMS_MAX_DAILY_SENDS:-5}
       APP_ENV: ${APP_ENV:-development}
       PEOPLE_INTERNAL_URL: http://people-service:8000
     depends_on:
@@ -161,7 +169,7 @@ services:
     networks: [chekad]
     expose: ["8000"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -197,7 +205,7 @@ services:
     networks: [chekad]
     expose: ["8000"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -221,7 +229,7 @@ services:
     networks: [chekad]
     expose: ["8000"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5

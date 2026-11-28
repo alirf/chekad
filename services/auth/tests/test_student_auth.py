@@ -1,13 +1,51 @@
 import bcrypt
+import re
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app import main as auth_main
 from app.config import settings
 from app.db import SessionLocal
 from app.main import app
-from app.models import MentorUser, StudentUser, TeacherUser
+from app.models import MentorUser, StudentUser, StudentVerificationCode, TeacherUser
 from app.security import MENTOR_COOKIE_NAME, STUDENT_COOKIE_NAME, TEACHER_COOKIE_NAME
+
+
+SMS_OUTBOX: list[tuple[str, str]] = []
+
+
+@pytest.fixture(autouse=True)
+def capture_verification_sms(monkeypatch):
+    SMS_OUTBOX.clear()
+    monkeypatch.setattr(
+        auth_main,
+        "send_sms",
+        lambda phone, message: SMS_OUTBOX.append((phone, message)),
+    )
+
+
+def verification_code(index: int) -> str:
+    match = re.search(r"\b(\d{6})\b", SMS_OUTBOX[index][1])
+    assert match is not None, "test SMS must contain a six-digit verification code"
+    return match.group(1)
+
+
+def confirm_student_code(client, purpose: str, message_index: int):
+    return client.post(
+        "/student/verification/confirm",
+        json={"purpose": purpose, "code": verification_code(message_index)},
+        headers={"Origin": settings.public_site_origin},
+    )
+
+
+def confirm_both_verifications(client):
+    phone = confirm_student_code(client, "student_phone", 0)
+    guardian = confirm_student_code(client, "guardian_consent", 1)
+    assert phone.status_code == 200
+    assert guardian.status_code == 200
+    assert guardian.json()["fully_verified"] is True
 
 
 def register_payload(**overrides):
@@ -33,13 +71,27 @@ def test_registration_normalizes_phone_hashes_password_and_sets_student_cookie()
         assert response.status_code == 201
         assert response.json()["student"]["phone"] == "09123456789"
         assert response.json()["student"]["phone_verified"] is False
+        assert response.json()["student"]["guardian_consent"] is False
         assert STUDENT_COOKIE_NAME in response.cookies
+        assert len(SMS_OUTBOX) == 2
+        assert SMS_OUTBOX[0][0] == "09123456789"
+        assert SMS_OUTBOX[1][0] == "09121112233"
 
         with SessionLocal() as db:
             student = db.query(StudentUser).filter_by(phone="09123456789").one()
+            challenges = db.query(StudentVerificationCode).filter_by(student_id=student.id).all()
+            assert len(challenges) == 2
+            stored_hashes = {challenge.purpose: challenge.code_hash for challenge in challenges}
+            assert stored_hashes["student_phone"] == auth_main._verification_code_hash(
+                student.id, "student_phone", verification_code(0)
+            )
+            assert stored_hashes["guardian_consent"] == auth_main._verification_code_hash(
+                student.id, "guardian_consent", verification_code(1)
+            )
             assert student.password_hash != "SecurePass!234"
-            assert student.guardian_consent is True
-            assert student.guardian_consent_at is not None
+            assert student.guardian_consent is False
+            assert student.guardian_consent_at is None
+            assert student.phone_verified is False
             assert student.privacy_accepted_at is not None
 
 
@@ -82,6 +134,7 @@ def test_student_login_profile_services_logout_and_admin_separation():
             json={"phone": "۰۹۱۲۳۴۵۶۷۸۹", "password": "SecurePass!234"},
         )
         assert login.status_code == 200
+        confirm_both_verifications(client)
 
         me = client.get("/student/me")
         assert me.status_code == 200
@@ -101,6 +154,64 @@ def test_student_login_profile_services_logout_and_admin_separation():
         logout = client.post("/student/logout")
         assert logout.status_code == 200
         assert client.get("/student/me").status_code == 401
+
+
+def test_student_services_require_phone_and_guardian_verification():
+    with TestClient(app) as client:
+        registered = client.post("/student/register", json=register_payload())
+        assert registered.status_code == 201
+        assert client.get("/student/services").status_code == 403
+
+        phone = confirm_student_code(client, "student_phone", 0)
+        assert phone.status_code == 200
+        assert phone.json()["student"]["phone_verified"] is True
+        assert phone.json()["student"]["guardian_consent"] is False
+        assert client.get("/student/services").status_code == 403
+
+        guardian = confirm_student_code(client, "guardian_consent", 1)
+        assert guardian.status_code == 200
+        assert guardian.json()["fully_verified"] is True
+        assert client.get("/student/services").status_code == 200
+
+
+def test_verification_code_cannot_be_reused():
+    with TestClient(app) as client:
+        assert client.post("/student/register", json=register_payload()).status_code == 201
+        first = confirm_student_code(client, "student_phone", 0)
+        second = confirm_student_code(client, "student_phone", 0)
+        assert first.status_code == 200
+        assert second.status_code == 409
+
+
+def test_verification_code_locks_after_five_incorrect_attempts():
+    with TestClient(app) as client:
+        registered = client.post("/student/register", json=register_payload())
+        assert registered.status_code == 201
+
+        headers = {"Origin": settings.public_site_origin}
+        for attempt in range(5):
+            response = client.post(
+                "/student/verification/confirm",
+                json={"purpose": "student_phone", "code": "000000"},
+                headers=headers,
+            )
+            assert response.status_code == (429 if attempt == 4 else 422)
+
+        locked = client.post(
+            "/student/verification/confirm",
+            json={"purpose": "student_phone", "code": verification_code(0)},
+            headers=headers,
+        )
+        assert locked.status_code == 429
+
+
+def test_registration_requires_a_separate_guardian_phone():
+    with TestClient(app) as client:
+        response = client.post(
+            "/student/register",
+            json=register_payload(guardian_phone="۰۹۱۲۳۴۵۶۷۸۹"),
+        )
+    assert response.status_code == 422
 
 
 def test_registration_can_be_disabled_by_configuration(monkeypatch):

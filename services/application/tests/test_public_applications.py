@@ -3,6 +3,8 @@ import os
 os.environ.setdefault("DB_URL", "sqlite:///./application-test-default.db")
 os.environ.setdefault("SERVICE_NAME", "application-service")
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -12,7 +14,9 @@ from sqlalchemy.pool import StaticPool
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app, require_admin, require_student
-from app.models import MentorshipApplication, Student, TutoringApplication
+from app.models import MentorshipApplication, Student, StudentInvoice, TutoringApplication
+import app.purge_expired_applications as retention_module
+from app.purge_expired_applications import student_is_referenced
 
 AUTHENTICATED_STUDENT = {
     "id": 41,
@@ -21,6 +25,8 @@ AUTHENTICATED_STUDENT = {
     "grade": "یازدهم",
     "field": "physics",
     "guardian_phone": "09123456789",
+    "phone_verified": True,
+    "guardian_consent": True,
 }
 
 TEST_ENGINE = create_engine(
@@ -121,7 +127,7 @@ def test_mentorship_application_is_persisted_without_student_phone(client, db_se
     assert application.student_id == student.id
     assert application.guardian_consent_at is not None
     assert application.privacy_accepted_at is not None
-    assert application.privacy_notice_version == "2026-11-28-v3"
+    assert application.privacy_notice_version == "2026-11-28-v4"
     assert "برنامه‌ریزی و پیگیری" in application.student_note
 
 
@@ -226,6 +232,138 @@ def test_mentorship_and_tutoring_requests_reuse_the_authenticated_student(client
     assert tutoring.status_code == 201
     assert db_session.query(Student).count() == 1
     assert db_session.query(MentorshipApplication).one().student_id == db_session.query(TutoringApplication).one().student_id
+
+
+def test_retention_preserves_student_with_historical_invoice(db_session):
+    student = Student(
+        auth_student_id=7001,
+        first_name="آرمان",
+        last_name="رضایی",
+        grade="یازدهم",
+        field="physics",
+    )
+    db_session.add(student)
+    db_session.commit()
+    db_session.refresh(student)
+
+    db_session.add(StudentInvoice(
+        invoice_number="CH-RETENTION-0001",
+        student_id=student.id,
+        student_auth_id=7001,
+        service_type="mentorship",
+        title="فاکتور تاریخی منتورینگ",
+        amount_toman=250000,
+        status="paid",
+        created_by_admin_id=7,
+    ))
+    db_session.commit()
+
+    assert student_is_referenced(db_session, student.id) is True
+
+
+def test_retention_purges_expired_request_but_keeps_student_with_invoice(db_session, monkeypatch):
+    student = Student(
+        auth_student_id=7002,
+        first_name="مینا",
+        last_name="نمونه",
+        grade="دهم",
+        field="computer",
+    )
+    db_session.add(student)
+    db_session.flush()
+
+    application = MentorshipApplication(
+        student_id=student.id,
+        field="computer",
+        status="completed",
+        created_at=datetime.now(timezone.utc) - timedelta(days=400),
+    )
+    db_session.add(application)
+    db_session.flush()
+
+    invoice = StudentInvoice(
+        invoice_number="CH-RETENTION-0002",
+        student_id=student.id,
+        student_auth_id=7002,
+        service_type="other",
+        title="فاکتور تاریخی مستقل",
+        amount_toman=180000,
+        status="paid",
+        created_by_admin_id=7,
+    )
+    db_session.add(invoice)
+    db_session.commit()
+    student_id = student.id
+    application_id = application.id
+    invoice_id = invoice.id
+
+    monkeypatch.setattr(retention_module, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(
+        retention_module,
+        "cutoff_date",
+        lambda: datetime.now(timezone.utc) - timedelta(days=365),
+    )
+
+    result = retention_module.purge_expired_applications()
+
+    assert result == (1, 0, 0)
+    db_session.expire_all()
+    assert db_session.get(MentorshipApplication, application_id) is None
+    assert db_session.get(Student, student_id) is not None
+    assert db_session.get(StudentInvoice, invoice_id) is not None
+
+
+def test_retention_keeps_request_referenced_by_its_invoice(db_session, monkeypatch):
+    student = Student(
+        auth_student_id=7003,
+        first_name="سارا",
+        last_name="نمونه",
+        grade="یازدهم",
+        field="physics",
+    )
+    db_session.add(student)
+    db_session.flush()
+
+    application = MentorshipApplication(
+        student_id=student.id,
+        field="physics",
+        status="completed",
+        created_at=datetime.now(timezone.utc) - timedelta(days=400),
+    )
+    db_session.add(application)
+    db_session.flush()
+
+    invoice = StudentInvoice(
+        invoice_number="CH-RETENTION-0003",
+        student_id=student.id,
+        student_auth_id=7003,
+        service_type="mentorship",
+        application_id=application.id,
+        title="فاکتور منتورینگ مرتبط",
+        amount_toman=300000,
+        status="paid",
+        created_by_admin_id=7,
+    )
+    db_session.add(invoice)
+    db_session.commit()
+    student_id = student.id
+    application_id = application.id
+    invoice_id = invoice.id
+
+    monkeypatch.setattr(retention_module, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(
+        retention_module,
+        "cutoff_date",
+        lambda: datetime.now(timezone.utc) - timedelta(days=365),
+    )
+
+    result = retention_module.purge_expired_applications()
+
+    assert result == (0, 0, 0)
+    db_session.expire_all()
+    assert db_session.get(MentorshipApplication, application_id) is not None
+    assert db_session.get(Student, student_id) is not None
+    assert db_session.get(StudentInvoice, invoice_id) is not None
 
 
 def test_student_application_inbox_only_returns_the_current_students_requests(client, db_session):
@@ -384,6 +522,50 @@ def test_admin_inbox_status_and_internal_notes(client, db_session):
 
         refreshed = client.get(f"/admin/applications/mentorship/{request_id}")
         assert refreshed.json()["internal_notes"][0]["content"] == "تماس اولیه انجام شود"
+    finally:
+        app.dependency_overrides.pop(require_admin, None)
+
+
+def test_application_status_state_machine_rejects_skipped_workflow_steps(client, db_session):
+    app.dependency_overrides[require_admin] = lambda: {"id": 7}
+    try:
+        created = client.post(
+            "/mentorship-applications",
+            json=valid_common_payload(),
+            headers=same_origin_headers(),
+        )
+        assert created.status_code == 201
+        request_id = created.json()["request_id"]
+
+        skipped = client.patch(
+            f"/admin/applications/mentorship/{request_id}",
+            json={"status": "active"},
+            headers=same_origin_headers(),
+        )
+        assert skipped.status_code == 409
+
+        accepted_without_selection = client.patch(
+            f"/admin/applications/mentorship/{request_id}",
+            json={"status": "accepted"},
+            headers=same_origin_headers(),
+        )
+        assert accepted_without_selection.status_code == 409
+
+        reviewing = client.patch(
+            f"/admin/applications/mentorship/{request_id}",
+            json={"status": "reviewing"},
+            headers=same_origin_headers(),
+        )
+        assert reviewing.status_code == 200
+        reverse = client.patch(
+            f"/admin/applications/mentorship/{request_id}",
+            json={"status": "new"},
+            headers=same_origin_headers(),
+        )
+        assert reverse.status_code == 409
+
+        detail = client.get(f"/admin/applications/mentorship/{request_id}")
+        assert detail.json()["allowed_transitions"] == ["cancelled", "rejected", "waiting_for_student"]
     finally:
         app.dependency_overrides.pop(require_admin, None)
 

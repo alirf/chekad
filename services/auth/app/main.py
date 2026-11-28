@@ -1,4 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
+import hmac
+import secrets
 
 import bcrypt
 import httpx
@@ -11,7 +14,8 @@ from urllib.parse import urlsplit
 
 from app.config import settings
 from app.db import engine, get_db
-from app.models import AdminUser, MentorUser, StudentUser, TeacherUser
+from app.models import AdminUser, MentorUser, StudentUser, StudentVerificationCode, TeacherUser
+from app.sms import SMSDeliveryError, send_sms
 from app.schemas import (
     AdminPublic,
     LoginRequest,
@@ -29,6 +33,8 @@ from app.schemas import (
     StudentPublic,
     StudentRegisterRequest,
     StudentServicePublic,
+    StudentVerificationConfirmRequest,
+    StudentVerificationResendRequest,
 )
 from app.security import (
     COOKIE_NAME,
@@ -136,7 +142,117 @@ def public_student(student: StudentUser) -> StudentPublic:
         grade=student.grade,
         field=student.field,
         phone_verified=student.phone_verified,
+        guardian_consent=student.guardian_consent,
     )
+
+
+VERIFICATION_CODE_ATTEMPT_LIMIT = 5
+
+
+def _verification_code_hash(student_id: int, purpose: str, code: str) -> str:
+    material = f"{student_id}:{purpose}:{code}".encode("utf-8")
+    configured_secret = settings.otp_hash_secret.get_secret_value()
+    secret = (configured_secret or settings.jwt_secret.get_secret_value()).encode("utf-8")
+    return hmac.new(secret, material, hashlib.sha256).hexdigest()
+
+
+def _create_verification_challenge(
+    db: Session,
+    student: StudentUser,
+    purpose: str,
+) -> tuple[StudentVerificationCode, str]:
+    if purpose == "guardian_consent" and student.phone == student.guardian_phone:
+        raise HTTPException(
+            409,
+            "شماره سرپرست باید با شماره دانش‌آموز متفاوت باشد؛ برای اصلاح شماره با پشتیبانی چکاد تماس بگیرید.",
+        )
+
+    now = datetime.now(timezone.utc)
+    recent_count = (
+        db.query(StudentVerificationCode)
+        .filter(
+            StudentVerificationCode.student_id == student.id,
+            StudentVerificationCode.purpose == purpose,
+            StudentVerificationCode.created_at >= now - timedelta(days=1),
+        )
+        .count()
+    )
+    if recent_count >= settings.sms_max_daily_sends:
+        raise HTTPException(429, "سقف روزانه ارسال کد تأیید برای این مرحله به پایان رسیده است.")
+
+    previous = (
+        db.query(StudentVerificationCode)
+        .filter(
+            StudentVerificationCode.student_id == student.id,
+            StudentVerificationCode.purpose == purpose,
+        )
+        .order_by(StudentVerificationCode.created_at.desc(), StudentVerificationCode.id.desc())
+        .first()
+    )
+    if previous is not None:
+        previous_created_at = previous.created_at
+        if previous_created_at.tzinfo is None:
+            previous_created_at = previous_created_at.replace(tzinfo=timezone.utc)
+        elapsed = (now - previous_created_at).total_seconds()
+        if elapsed < settings.sms_resend_cooldown_seconds:
+            remaining = max(1, int(settings.sms_resend_cooldown_seconds - elapsed))
+            raise HTTPException(429, f"برای ارسال دوباره کد، {remaining} ثانیه صبر کنید.")
+
+    db.query(StudentVerificationCode).filter(
+        StudentVerificationCode.student_id == student.id,
+        StudentVerificationCode.purpose == purpose,
+        StudentVerificationCode.consumed_at.is_(None),
+    ).update({"consumed_at": now}, synchronize_session=False)
+
+    code = f"{secrets.randbelow(900000) + 100000:06d}"
+    destination = student.phone if purpose == "student_phone" else student.guardian_phone
+    challenge = StudentVerificationCode(
+        student_id=student.id,
+        purpose=purpose,
+        destination_phone=destination,
+        code_hash=_verification_code_hash(student.id, purpose, code),
+        expires_at=now + timedelta(seconds=settings.sms_code_ttl_seconds),
+        attempts=0,
+        created_at=now,
+    )
+    db.add(challenge)
+    db.flush()
+    return challenge, code
+
+
+def _send_verification_sms(student: StudentUser, purpose: str, code: str) -> None:
+    expiry_minutes = max(1, settings.sms_code_ttl_seconds // 60)
+    if purpose == "student_phone":
+        message = f"کد تأیید شماره همراه شما در چکاد: {code} | اعتبار: {expiry_minutes} دقیقه"
+        destination = student.phone
+    else:
+        message = (
+            f"برای تأیید شماره و اعلام رضایت سرپرست دانش‌آموز در چکاد، "
+            f"کد {code} را وارد کنید. با تأیید کد، رضایت خود را اعلام می‌کنید. "
+            f"اعتبار: {expiry_minutes} دقیقه"
+        )
+        destination = student.guardian_phone
+    send_sms(destination, message)
+
+
+def _require_student_same_origin(request: Request) -> None:
+    origin = request.headers.get("origin")
+    parsed = urlsplit(origin or "")
+    configured = urlsplit(settings.public_site_origin.strip())
+    expected = f"{configured.scheme}://{configured.netloc}".lower()
+    received = f"{parsed.scheme}://{parsed.netloc}".lower()
+    if (
+        not origin
+        or parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.path not in ("", "/")
+        or parsed.query
+        or parsed.fragment
+        or parsed.username
+        or parsed.password
+        or received != expected
+    ):
+        raise HTTPException(403, "مبدأ درخواست تأیید معتبر نیست.")
 
 
 @app.post("/login", response_model=LoginResponse)
@@ -225,8 +341,8 @@ def student_register(
         grade=payload.grade,
         field=payload.field,
         guardian_phone=payload.guardian_phone,
-        guardian_consent=True,
-        guardian_consent_at=now,
+        guardian_consent=False,
+        guardian_consent_at=None,
         privacy_accepted_at=now,
         phone_verified=False,
         is_active=True,
@@ -241,6 +357,22 @@ def student_register(
             status_code=status.HTTP_409_CONFLICT,
             detail="برای این شماره همراه حساب دیگری ثبت شده است.",
         )
+
+    try:
+        _, phone_code = _create_verification_challenge(db, student, "student_phone")
+        _, guardian_code = _create_verification_challenge(db, student, "guardian_consent")
+        db.commit()
+        _send_verification_sms(student, "student_phone", phone_code)
+        _send_verification_sms(student, "guardian_consent", guardian_code)
+    except HTTPException:
+        db.rollback()
+        raise
+    except SMSDeliveryError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="حساب ایجاد شد، اما ارسال کد تأیید انجام نشد. وارد حساب شوید و ارسال دوباره را امتحان کنید.",
+        ) from exc
 
     expires_in = set_student_cookie(response, student)
     return StudentAuthResponse(expires_in=expires_in, student=public_student(student))
@@ -280,6 +412,8 @@ def student_me(student: StudentUser = Depends(get_current_student)):
 
 @app.get("/student/services", response_model=list[StudentServicePublic])
 def student_services(student: StudentUser = Depends(get_current_student)):
+    if not student.phone_verified or not student.guardian_consent:
+        raise HTTPException(403, "برای استفاده از خدمات چکاد، تأیید شماره و رضایت سرپرست را تکمیل کنید.")
     # This is the current service directory, not a claim that the student
     # already owns a package, payment, lesson booking, or exam entitlement.
     return [
@@ -319,6 +453,100 @@ def student_services(student: StudentUser = Depends(get_current_student)):
             availability="available",
         ),
     ]
+
+
+@app.post("/student/verification/resend")
+def resend_student_verification(
+    payload: StudentVerificationResendRequest,
+    request: Request,
+    student: StudentUser = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    _require_student_same_origin(request)
+    if payload.purpose == "student_phone" and student.phone_verified:
+        raise HTTPException(409, "شماره دانش‌آموز قبلاً تأیید شده است.")
+    if payload.purpose == "guardian_consent" and student.guardian_consent:
+        raise HTTPException(409, "رضایت سرپرست قبلاً تأیید شده است.")
+
+    try:
+        _, code = _create_verification_challenge(db, student, payload.purpose)
+        db.commit()
+        _send_verification_sms(student, payload.purpose, code)
+    except HTTPException:
+        db.rollback()
+        raise
+    except SMSDeliveryError as exc:
+        db.rollback()
+        raise HTTPException(503, "ارسال پیامک انجام نشد. کمی بعد دوباره تلاش کنید.") from exc
+
+    return {
+        "sent": True,
+        "purpose": payload.purpose,
+        "expires_in": settings.sms_code_ttl_seconds,
+        "destination": student.phone if payload.purpose == "student_phone" else student.guardian_phone,
+    }
+
+
+@app.post("/student/verification/confirm")
+def confirm_student_verification(
+    payload: StudentVerificationConfirmRequest,
+    request: Request,
+    student: StudentUser = Depends(get_current_student),
+    db: Session = Depends(get_db),
+):
+    _require_student_same_origin(request)
+    already_verified = student.phone_verified if payload.purpose == "student_phone" else student.guardian_consent
+    if already_verified:
+        raise HTTPException(409, "این مرحله قبلاً تأیید شده است.")
+
+    challenge = (
+        db.query(StudentVerificationCode)
+        .filter(
+            StudentVerificationCode.student_id == student.id,
+            StudentVerificationCode.purpose == payload.purpose,
+            StudentVerificationCode.consumed_at.is_(None),
+        )
+        .order_by(StudentVerificationCode.created_at.desc(), StudentVerificationCode.id.desc())
+        .with_for_update()
+        .first()
+    )
+    if challenge is None:
+        raise HTTPException(404, "کد فعالی پیدا نشد. ابتدا کد تازه درخواست کنید.")
+
+    now = datetime.now(timezone.utc)
+    expires_at = challenge.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
+        challenge.consumed_at = now
+        db.commit()
+        raise HTTPException(410, "مهلت کد تأیید به پایان رسیده است. کد تازه درخواست کنید.")
+    if challenge.attempts >= VERIFICATION_CODE_ATTEMPT_LIMIT:
+        raise HTTPException(429, "تعداد تلاش‌های این کد به پایان رسیده است. کد تازه درخواست کنید.")
+
+    expected_hash = _verification_code_hash(student.id, payload.purpose, payload.code)
+    if not hmac.compare_digest(challenge.code_hash, expected_hash):
+        challenge.attempts += 1
+        db.commit()
+        if challenge.attempts >= VERIFICATION_CODE_ATTEMPT_LIMIT:
+            raise HTTPException(429, "تعداد تلاش‌های این کد به پایان رسیده است. کد تازه درخواست کنید.")
+        raise HTTPException(422, "کد تأیید صحیح نیست.")
+
+    challenge.consumed_at = now
+    if payload.purpose == "student_phone":
+        student.phone_verified = True
+    else:
+        student.guardian_consent = True
+        student.guardian_consent_at = now
+    student.updated_at = now
+    db.commit()
+    db.refresh(student)
+
+    return {
+        "student": public_student(student),
+        "fully_verified": bool(student.phone_verified and student.guardian_consent),
+        "verified_purpose": payload.purpose,
+    }
 
 
 @app.post("/student/logout")

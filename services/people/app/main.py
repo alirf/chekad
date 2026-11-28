@@ -43,13 +43,23 @@ async def require_admin(request: Request) -> dict:
     return admin
 
 
+@app.get("/health/live")
+def health_live():
+    return {"status": "ok", "service": settings.service_name}
+
+
+@app.get("/health/ready")
 @app.get("/health")
-def health():
-    db_status = "ok"
+def health_ready():
     try:
-        with engine.connect() as c: c.execute(text("SELECT 1"))
-    except Exception as e: db_status = f"error:{e.__class__.__name__}"
-    return {"status": "ok", "service": settings.service_name, "db": db_status}
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "not_ready", "service": settings.service_name, "dependency": "database"},
+        ) from exc
+    return {"status": "ok", "service": settings.service_name, "db": "ok"}
 
 
 def person_dict(p):

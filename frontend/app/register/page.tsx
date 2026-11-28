@@ -54,7 +54,7 @@ export default function StudentRegisterPage() {
         throw new StudentAuthError("حساب ساخته شد، اما نشست مرورگر تأیید نشد. نشانی سایت و تنظیم کوکی محلی را بررسی کنید.");
       }
       setAuthenticated(session);
-      window.location.replace("/dashboard");
+      window.location.replace("/verify");
     } catch (cause) {
       setError(cause instanceof StudentAuthError ? cause.message : "ثبت‌نام انجام نشد. دوباره تلاش کنید.");
     } finally {
@@ -127,7 +127,7 @@ export default function StudentRegisterPage() {
               <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} />
               <span>اطلاعیه <Link href="/privacy" target="_blank">حریم خصوصی</Link> را خوانده‌ام و با ثبت اطلاعات ضروری برای ایجاد حساب موافقم.</span>
             </label>
-            <p className="student-auth-notice">ولی یا سرپرست قانونی باید پیش از ثبت‌نام، فرم و اطلاعیه حریم خصوصی را بررسی و تأیید کند. در این نسخه، ورود با رمز عبور انجام می‌شود؛ تأیید پیامکی شماره همراه و بازیابی خودکار رمز هنوز پیاده‌سازی نشده‌اند. ثبت checkbox به‌تنهایی احراز مستقل سرپرست نیست.</p>
+            <p className="student-auth-notice">پس از ساخت حساب، یک کد جداگانه برای شماره دانش‌آموز و یک کد برای شماره سرپرست ارسال می‌شود. حساب تا تأیید هر دو مرحله قابل استفاده نخواهد بود. ثبت checkbox به‌تنهایی جایگزین تأیید مستقل سرپرست نیست.</p>
             {error && <p className="student-auth-error" role="alert">{error}</p>}
             <button type="submit" className="student-auth-submit" disabled={loading || !guardianConsent || !privacyAccepted}>
               {loading ? "در حال ساخت حساب..." : "ساخت حساب دانش‌آموزی"}

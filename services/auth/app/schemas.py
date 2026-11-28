@@ -1,7 +1,7 @@
 import re
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 _DIGIT_TRANSLATION = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
@@ -94,6 +94,28 @@ class StudentRegisterRequest(BaseModel):
             raise ValueError("تأیید اطلاعیه حریم خصوصی لازم است")
         return value
 
+    @model_validator(mode="after")
+    def require_separate_guardian_phone(self):
+        if self.phone == self.guardian_phone:
+            raise ValueError("شماره دانش‌آموز و ولی یا سرپرست باید مستقل باشند")
+        return self
+
+
+class StudentVerificationConfirmRequest(BaseModel):
+    purpose: Literal["student_phone", "guardian_consent"]
+    code: str = Field(pattern=r"^\d{6}$")
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def normalize_verification_code(cls, value: str) -> str:
+        if not isinstance(value, str):
+            raise ValueError("کد تأیید معتبر نیست")
+        return value.translate(_DIGIT_TRANSLATION).strip()
+
+
+class StudentVerificationResendRequest(BaseModel):
+    purpose: Literal["student_phone", "guardian_consent"]
+
 
 class StudentLoginRequest(BaseModel):
     phone: str
@@ -123,6 +145,7 @@ class StudentPublic(BaseModel):
     grade: str
     field: str
     phone_verified: bool
+    guardian_consent: bool
 
 
 class StudentAuthResponse(BaseModel):

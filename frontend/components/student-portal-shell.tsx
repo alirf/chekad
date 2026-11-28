@@ -85,6 +85,10 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
       return;
     }
     if (status !== "authenticated") return;
+    if (!student?.phone_verified || !student.guardian_consent) {
+      router.replace("/verify");
+      return;
+    }
 
     let active = true;
     fetchStudentMessageThreads()
@@ -98,7 +102,7 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [status, router, refreshSession]);
+  }, [status, student, router, refreshSession]);
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -135,10 +139,10 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
     );
   }
 
-  if (status === "guest" || !student) {
+  if (status === "guest" || !student || !student.phone_verified || !student.guardian_consent) {
     return (
       <div className="student-portal-checking" role="status">
-        <p>در حال انتقال به صفحهٔ ورود...</p>
+        <p>در حال انتقال به مرحله تأیید حساب...</p>
       </div>
     );
   }

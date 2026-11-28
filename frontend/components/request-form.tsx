@@ -117,6 +117,17 @@ export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boo
     );
   }
 
+  if (student && (!student.phone_verified || !student.guardian_consent)) {
+    return (
+      <section className="request-form request-disabled" aria-live="polite">
+        <span className="eyebrow">ACCOUNT VERIFICATION REQUIRED</span>
+        <h2>پیش از ثبت درخواست، تأیید حساب را کامل کن.</h2>
+        <p>برای حفاظت از حساب دانش‌آموز و اطمینان از رضایت سرپرست، ابتدا هر دو شماره را تأیید کن.</p>
+        <Link className="button button-primary" href="/verify">رفتن به مرحله تأیید</Link>
+      </section>
+    );
+  }
+
   if (success) {
     return (
       <section className="request-form request-success" aria-live="polite">

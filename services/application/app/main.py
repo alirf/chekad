@@ -41,7 +41,7 @@ app = FastAPI(
     version="0.7.0",
     description="Student portal, mentor and teacher communication, weekly plans, scheduling and billing.",
 )
-PRIVACY_NOTICE_VERSION = "2026-11-28-v3"
+PRIVACY_NOTICE_VERSION = "2026-11-28-v4"
 APPLICATION_STATUSES = {
     "new", "reviewing", "waiting_for_student", "options_proposed",
     "accepted", "active", "completed", "rejected", "cancelled",
@@ -199,6 +199,8 @@ async def require_student(request: Request) -> dict:
         raise HTTPException(503, "اطلاعات حساب دانش‌آموزی کامل نیست.")
     if student["field"] not in ("physics", "computer"):
         raise HTTPException(503, "رشته المپیاد حساب معتبر نیست.")
+    if student.get("phone_verified") is not True or student.get("guardian_consent") is not True:
+        raise HTTPException(403, "برای استفاده از این بخش، تأیید شماره و رضایت سرپرست را تکمیل کنید.")
     return student
 
 
@@ -834,6 +836,25 @@ def admin_applications(
     return {"items": collected[offset:offset + limit], "total": total, "limit": limit, "offset": offset}
 
 
+ADMIN_APPLICATION_TRANSITIONS = {
+    # Human-managed transitions. Offer selection and assignment lifecycle
+    # transitions are performed only by their dedicated endpoints.
+    "new": {"reviewing", "rejected", "cancelled"},
+    "reviewing": {"waiting_for_student", "rejected", "cancelled"},
+    "waiting_for_student": {"reviewing", "rejected", "cancelled"},
+    "options_proposed": {"reviewing", "rejected", "cancelled"},
+    "accepted": {"cancelled"},
+    "active": set(),
+    "completed": set(),
+    "rejected": set(),
+    "cancelled": set(),
+}
+
+
+def admin_application_transitions(status_value: str) -> list[str]:
+    return sorted(ADMIN_APPLICATION_TRANSITIONS.get(status_value, set()))
+
+
 @app.get("/admin/applications/{kind}/{application_id}")
 def admin_application_detail(
     kind: str,
@@ -853,6 +874,7 @@ def admin_application_detail(
         {"person_id": selected_offer.person_id, "person_name": selected_offer.person_name}
         if selected_offer is not None else None
     )
+    result["allowed_transitions"] = admin_application_transitions(row.status)
     notes = db.query(models.InternalNote).filter_by(
         application_type=kind, application_id=application_id
     ).order_by(models.InternalNote.created_at.desc(), models.InternalNote.id.desc()).all()
@@ -877,11 +899,31 @@ def update_application_status(
     if row is None:
         raise HTTPException(404, "درخواست پیدا نشد.")
     previous_status = row.status
+    if payload.reject_reason is not None and payload.status != "rejected":
+        raise HTTPException(422, "دلیل رد فقط برای وضعیت ردشده قابل ثبت است.")
+    if payload.status == previous_status:
+        return {
+            "id": row.id,
+            "kind": kind,
+            "status": row.status,
+            "updated_at": row.updated_at,
+            "updated_by": admin["id"],
+        }
+    allowed = ADMIN_APPLICATION_TRANSITIONS.get(previous_status, set())
+    if payload.status not in allowed:
+        raise HTTPException(
+            409,
+            "این انتقال وضعیت مجاز نیست؛ انتخاب پیشنهاد و تغییر وضعیت تخصیص باید از مسیر اختصاصی خود انجام شود.",
+        )
     row.status = payload.status
     if payload.status == "rejected":
         row.reject_reason = payload.reject_reason
-    elif payload.reject_reason is not None:
-        raise HTTPException(422, "دلیل رد فقط برای وضعیت ردشده قابل ثبت است.")
+    if previous_status == "options_proposed" or payload.status in {"cancelled", "rejected"}:
+        db.query(models.ApplicationOffer).filter(
+            models.ApplicationOffer.application_kind == kind,
+            models.ApplicationOffer.application_id == row.id,
+            models.ApplicationOffer.status == "proposed",
+        ).update({"status": "withdrawn"}, synchronize_session=False)
     if previous_status != row.status:
         labels = {"new": "ثبت‌شده", "reviewing": "در حال بررسی", "waiting_for_student": "منتظر پاسخ شما",
                   "options_proposed": "پیشنهادها آماده انتخاب", "accepted": "پذیرفته‌شده",
@@ -2012,6 +2054,15 @@ def update_assignment_status(
         raise HTTPException(404, "تخصیص پیدا نشد.")
     application = db.get(application_model, assignment.application_id)
     previous_status = assignment.status
+    if payload.status == previous_status:
+        return {"id": assignment.id, "kind": kind, "status": assignment.status}
+    allowed_assignment_transitions = {
+        "active": {"completed", "cancelled"},
+        "completed": set(),
+        "cancelled": set(),
+    }
+    if payload.status not in allowed_assignment_transitions.get(previous_status, set()):
+        raise HTTPException(409, "انتقال وضعیت تخصیص مجاز نیست.")
     assignment.status = payload.status
     if application is not None and payload.status == "completed":
         application.status = "completed"

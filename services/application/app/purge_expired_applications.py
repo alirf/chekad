@@ -4,9 +4,10 @@ Run with a scheduled host task (daily is recommended):
     docker compose exec application-service python -m app.purge_expired_applications
 
 Requests older than PURGE_APPLICATIONS_AFTER_DAYS are removed unless they
-still have an active assignment. Internal notes and dependent sessions are
-removed with the application. Student records are removed only when no
-mentorship or tutoring request still references them.
+still have an active assignment or a retained invoice references that request.
+Internal notes and dependent sessions are removed with the application.
+Student records are removed only when no mentorship/tutoring request or
+historical invoice still references them.
 """
 import os
 from datetime import datetime, timedelta, timezone
@@ -19,6 +20,7 @@ from app.models import (
     MentorAssignment,
     MentorshipApplication,
     Student,
+    StudentInvoice,
     TutorAssignment,
     TutoringApplication,
 )
@@ -63,6 +65,19 @@ def has_active_tutoring(db, application_id: int) -> bool:
     )
 
 
+def has_invoice_for_application(db, application_type: str, application_id: int) -> bool:
+    """Keep the request while a retained invoice still points to it."""
+    return (
+        db.query(StudentInvoice.id)
+        .filter(
+            StudentInvoice.service_type == application_type,
+            StudentInvoice.application_id == application_id,
+        )
+        .first()
+        is not None
+    )
+
+
 def student_is_referenced(db, student_id: int) -> bool:
     mentorship_exists = (
         db.query(MentorshipApplication.id)
@@ -76,7 +91,16 @@ def student_is_referenced(db, student_id: int) -> bool:
         .first()
         is not None
     )
-    return mentorship_exists or tutoring_exists
+    # Invoices are historical financial records. Their RESTRICT foreign key
+    # intentionally keeps the student row alive until a separate retention
+    # or anonymization policy has handled those records.
+    invoice_exists = (
+        db.query(StudentInvoice.id)
+        .filter(StudentInvoice.student_id == student_id)
+        .first()
+        is not None
+    )
+    return mentorship_exists or tutoring_exists or invoice_exists
 
 
 def purge_expired_applications() -> tuple[int, int, int]:
@@ -93,7 +117,9 @@ def purge_expired_applications() -> tuple[int, int, int]:
             .all()
         )
         for application in old_mentorship:
-            if has_active_mentorship(db, application.id):
+            if has_active_mentorship(db, application.id) or has_invoice_for_application(
+                db, "mentorship", application.id
+            ):
                 continue
             student_id = application.student_id
             db.query(InternalNote).filter(
@@ -115,7 +141,9 @@ def purge_expired_applications() -> tuple[int, int, int]:
             .all()
         )
         for application in old_tutoring:
-            if has_active_tutoring(db, application.id):
+            if has_active_tutoring(db, application.id) or has_invoice_for_application(
+                db, "tutoring", application.id
+            ):
                 continue
             student_id = application.student_id
             db.query(InternalNote).filter(

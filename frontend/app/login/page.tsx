@@ -23,7 +23,9 @@ export default function StudentLoginPage() {
         throw new StudentAuthError("ورود انجام شد، اما نشست مرورگر تأیید نشد. نشانی سایت و تنظیم کوکی محلی را بررسی کنید.");
       }
       setAuthenticated(session);
-      window.location.replace("/dashboard");
+      window.location.replace(
+        session.phone_verified && session.guardian_consent ? "/dashboard" : "/verify",
+      );
     } catch (cause) {
       setError(cause instanceof StudentAuthError ? cause.message : "ورود انجام نشد. دوباره تلاش کنید.");
     } finally {
