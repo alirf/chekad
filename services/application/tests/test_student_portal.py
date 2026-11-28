@@ -234,7 +234,7 @@ def test_admin_assignment_creates_sessions_and_restricted_advisor_chat(client, d
     monkeypatch.setattr(application_main, "fetch_public_person", fake_people_profile)
 
     student_profile = Student(
-        auth_student_id=AUTHENTICATED_STUDENT["id"],
+        auth_student_id=CURRENT_STUDENT["id"],
         first_name="آرمان",
         last_name="رضایی",
         grade="یازدهم",
@@ -376,7 +376,7 @@ def test_admin_invoice_creation_payment_and_student_isolation(client, db_session
 
     app.dependency_overrides[require_admin] = lambda: {"id": 7, "name": "مدیر"}
     student_profile = Student(
-        auth_student_id=AUTHENTICATED_STUDENT["id"],
+        auth_student_id=CURRENT_STUDENT["id"],
         first_name="آرمان",
         last_name="رضایی",
         grade="یازدهم",
@@ -390,7 +390,7 @@ def test_admin_invoice_creation_payment_and_student_isolation(client, db_session
         "/admin/invoices",
         headers={"Origin": "https://testserver"},
         json={
-            "student_auth_id": AUTHENTICATED_STUDENT["id"],
+            "student_auth_id": CURRENT_STUDENT["id"],
             "service_type": "other",
             "title": "هزینه خدمات آموزشی",
             "description": "صورتحساب آزمایشی",
@@ -418,7 +418,7 @@ def test_admin_invoice_creation_payment_and_student_isolation(client, db_session
     assert paid.json()["status"] == "paid"
     assert paid.json()["payment_reference"] == "MANUAL-RECEIPT-001"
 
-    other_student = {"id": 99, **{k: v for k, v in AUTHENTICATED_STUDENT.items() if k != "id"}}
+    other_student = {"id": 99, **{k: v for k, v in CURRENT_STUDENT.items() if k != "id"}}
     app.dependency_overrides[require_student] = lambda: other_student
     isolated = client.get("/student/invoices")
     assert isolated.status_code == 200
