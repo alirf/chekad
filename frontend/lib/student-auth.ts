@@ -6,6 +6,7 @@ export interface StudentProfile {
   first_name: string;
   last_name: string;
   phone: string;
+  guardian_phone: string;
   grade: StudentGrade;
   field: OlympiadField;
   phone_verified: boolean;
@@ -21,6 +22,18 @@ export interface StudentRegisterPayload {
   password: string;
   guardian_consent: true;
   privacy_accepted: true;
+}
+
+export interface StudentApplication {
+  id: number;
+  kind: "mentorship" | "tutoring";
+  tracking_code: string;
+  title: string;
+  field: OlympiadField;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  details?: string | null;
 }
 
 export interface StudentService {
@@ -104,6 +117,10 @@ export async function fetchStudentServices() {
   return requestJson<StudentService[]>("/auth/student/services");
 }
 
+
+export async function fetchStudentApplications() {
+  return requestJson<{ items: StudentApplication[]; total: number }>("/application/student/applications");
+}
 export async function logoutStudent() {
   return requestJson<{ message: string }>("/auth/student/logout", { method: "POST" });
 }

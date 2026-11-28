@@ -11,8 +11,17 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.db import Base, get_db
-from app.main import app, require_admin
+from app.main import app, require_admin, require_student
 from app.models import MentorshipApplication, Student, TutoringApplication
+
+AUTHENTICATED_STUDENT = {
+    "id": 41,
+    "first_name": "آرمان",
+    "last_name": "رضایی",
+    "grade": "یازدهم",
+    "field": "physics",
+    "guardian_phone": "09123456789",
+}
 
 TEST_ENGINE = create_engine(
     "sqlite://",
@@ -47,6 +56,7 @@ def client():
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_student] = lambda: AUTHENTICATED_STUDENT.copy()
     with TestClient(app) as test_client:
         yield test_client
 
@@ -105,7 +115,9 @@ def test_mentorship_application_is_persisted_without_student_phone(client, db_se
     student = db_session.query(Student).one()
     application = db_session.query(MentorshipApplication).one()
     assert student.phone is None
-    assert student.parent_phone == "+989123456789"
+    assert student.auth_student_id == AUTHENTICATED_STUDENT["id"]
+    assert student.first_name == AUTHENTICATED_STUDENT["first_name"]
+    assert student.parent_phone == AUTHENTICATED_STUDENT["guardian_phone"]
     assert application.student_id == student.id
     assert application.guardian_consent_at is not None
     assert application.privacy_accepted_at is not None
@@ -135,6 +147,7 @@ def test_tutoring_application_is_persisted(client, db_session):
     assert application.field == "computer"
     assert application.guardian_consent_at is not None
     assert application.privacy_accepted_at is not None
+    assert student.auth_student_id == AUTHENTICATED_STUDENT["id"]
 
 
 def test_origin_with_path_is_rejected(client, db_session):
@@ -194,6 +207,104 @@ def test_invalid_guardian_phone_is_rejected(client, db_session):
 
     assert response.status_code == 422
     assert db_session.query(Student).count() == 0
+
+
+
+def test_mentorship_and_tutoring_requests_reuse_the_authenticated_student(client, db_session):
+    mentorship = client.post(
+        "/mentorship-applications",
+        json=valid_common_payload(),
+        headers=same_origin_headers(),
+    )
+    tutoring = client.post(
+        "/tutoring-applications",
+        json={**valid_common_payload(), "topic": "مکانیک"},
+        headers=same_origin_headers(),
+    )
+    assert mentorship.status_code == 201
+    assert tutoring.status_code == 201
+    assert db_session.query(Student).count() == 1
+    assert db_session.query(MentorshipApplication).one().student_id == db_session.query(TutoringApplication).one().student_id
+
+
+def test_student_application_inbox_only_returns_the_current_students_requests(client, db_session):
+    created = client.post(
+        "/mentorship-applications",
+        json=valid_common_payload(),
+        headers=same_origin_headers(),
+    )
+    assert created.status_code == 201
+    own_request_id = created.json()["request_id"]
+
+    other_student = Student(
+        auth_student_id=99,
+        first_name="دانش‌آموز دیگر",
+        last_name="نمونه",
+        grade="دهم",
+        field="computer",
+    )
+    db_session.add(other_student)
+    db_session.flush()
+    db_session.add(TutoringApplication(
+        student_id=other_student.id,
+        field="computer",
+        topic="الگوریتم",
+        description="یادداشت دانش‌آموز دیگر",
+        admin_note="یادداشت داخلی",
+        status="reviewing",
+    ))
+    db_session.commit()
+
+    response = client.get("/student/applications")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == own_request_id
+    assert body["items"][0]["kind"] == "mentorship"
+    assert body["items"][0]["tracking_code"] == f"CH-{own_request_id:06d}"
+    assert "admin_note" not in body["items"][0]
+    assert "guardian_phone" not in body["items"][0]
+
+
+def test_application_submission_rejects_mismatched_account_identity(client, db_session):
+    mismatch = client.post(
+        "/mentorship-applications",
+        json={**valid_common_payload(), "field": "computer"},
+        headers=same_origin_headers(),
+    )
+    assert mismatch.status_code == 422
+    assert db_session.query(Student).count() == 0
+
+    wrong_guardian = client.post(
+        "/tutoring-applications",
+        json={**valid_common_payload(), "guardian_phone": "09129998877", "topic": "جبر"},
+        headers=same_origin_headers(),
+    )
+    assert wrong_guardian.status_code == 422
+    assert db_session.query(Student).count() == 0
+
+
+def test_application_submission_requires_a_student_session(client, db_session):
+    app.dependency_overrides.pop(require_student, None)
+    try:
+        response = client.post(
+            "/mentorship-applications",
+            json=valid_common_payload(),
+            headers=same_origin_headers(),
+        )
+    finally:
+        app.dependency_overrides[require_student] = lambda: AUTHENTICATED_STUDENT.copy()
+    assert response.status_code == 401
+    assert db_session.query(Student).count() == 0
+
+
+def test_application_inbox_requires_a_student_session(client):
+    app.dependency_overrides.pop(require_student, None)
+    try:
+        response = client.get("/student/applications")
+    finally:
+        app.dependency_overrides[require_student] = lambda: AUTHENTICATED_STUDENT.copy()
+    assert response.status_code == 401
 
 
 def test_admin_stats_requires_authentication(client):

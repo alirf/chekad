@@ -119,6 +119,7 @@ class StudentPublic(BaseModel):
     first_name: str
     last_name: str
     phone: str
+    guardian_phone: str
     grade: str
     field: str
     phone_verified: bool

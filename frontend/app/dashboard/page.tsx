@@ -3,24 +3,52 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { fetchStudentProfile, fetchStudentServices, logoutStudent, StudentAuthError, StudentProfile, StudentService } from "../../lib/student-auth";
+import {
+  fetchStudentApplications,
+  fetchStudentProfile,
+  fetchStudentServices,
+  logoutStudent,
+  StudentAuthError,
+  type StudentApplication,
+  type StudentProfile,
+  type StudentService,
+} from "../../lib/student-auth";
 
 const fieldNames = { physics: "المپیاد فیزیک", computer: "المپیاد کامپیوتر" };
+const statusLabels: Record<string, string> = {
+  new: "ثبت‌شده",
+  reviewing: "در حال بررسی",
+  waiting_for_student: "منتظر پاسخ دانش‌آموز",
+  options_proposed: "پیشنهادها آماده انتخاب",
+  accepted: "پذیرفته‌شده",
+  active: "در حال اجرا",
+  completed: "تکمیل‌شده",
+  rejected: "ردشده",
+  cancelled: "لغوشده",
+};
+
+function formatRequestDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
 
 export default function StudentDashboardPage() {
   const router = useRouter();
   const [student, setStudent] = useState<StudentProfile | null>(null);
   const [services, setServices] = useState<StudentService[]>([]);
+  const [applications, setApplications] = useState<StudentApplication[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    Promise.all([fetchStudentProfile(), fetchStudentServices()])
-      .then(([profile, serviceList]) => {
+    Promise.all([fetchStudentProfile(), fetchStudentServices(), fetchStudentApplications()])
+      .then(([profile, serviceList, applicationList]) => {
         if (!active) return;
         setStudent(profile);
         setServices(serviceList);
+        setApplications(applicationList.items);
       })
       .catch((cause) => {
         if (!active) return;
@@ -60,7 +88,7 @@ export default function StudentDashboardPage() {
           <div>
             <span className="student-dashboard-kicker">پنل دانش‌آموزی چکاد</span>
             <h1>سلام {student.first_name}، به مسیرت خوش آمدی.</h1>
-            <p>اینجا می‌توانی سرویس‌های چکاد و مسیرهای تخصصی مرتبط با هدفت را دنبال کنی.</p>
+            <p>اینجا می‌توانی سرویس‌ها و درخواست‌های ثبت‌شده‌ات را دنبال کنی.</p>
           </div>
           <button type="button" className="student-dashboard-logout" onClick={handleLogout}>خروج از حساب</button>
           <div className="student-dashboard-orbit" aria-hidden="true" />
@@ -80,6 +108,49 @@ export default function StudentDashboardPage() {
         </section>
 
         {error && <p className="student-dashboard-error" role="alert">{error}</p>}
+
+        <section className="student-applications-section">
+          <div className="student-services-heading">
+            <div>
+              <span className="student-dashboard-kicker">REQUEST TRACKING</span>
+              <h2>درخواست‌های من</h2>
+              <p>آخرین وضعیت درخواست‌های منتورینگ و کلاس خصوصی را اینجا ببین.</p>
+            </div>
+            <div className="student-application-actions">
+              <Link href="/mentorship/apply">درخواست منتورینگ</Link>
+              <Link href="/tutoring#request">درخواست کلاس خصوصی</Link>
+            </div>
+          </div>
+
+          {applications.length === 0 ? (
+            <div className="student-applications-empty">
+              <strong>هنوز درخواستی ثبت نکرده‌ای.</strong>
+              <p>بعد از ثبت درخواست منتورینگ یا کلاس خصوصی، کد پیگیری و وضعیت آن در همین بخش نمایش داده می‌شود.</p>
+            </div>
+          ) : (
+            <div className="student-applications-list">
+              {applications.map((application) => (
+                <article className="student-application-card" key={application.kind + "-" + application.id}>
+                  <div className="student-application-card-top">
+                    <div>
+                      <span className="student-application-kind">{application.title}</span>
+                      <h3>{fieldNames[application.field]}</h3>
+                    </div>
+                    <span className={"student-application-status status-" + application.status}>
+                      {statusLabels[application.status] || application.status}
+                    </span>
+                  </div>
+                  <div className="student-application-meta">
+                    <span>کد پیگیری: <b dir="ltr">{application.tracking_code}</b></span>
+                    <span>ثبت: {formatRequestDate(application.created_at)}</span>
+                    <span>آخرین تغییر: {formatRequestDate(application.updated_at)}</span>
+                  </div>
+                  {application.details && <p className="student-application-details">{application.details}</p>}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
 
         <section className="student-services-section">
           <div className="student-services-heading">
@@ -109,7 +180,7 @@ export default function StudentDashboardPage() {
           <div><strong>برای ادامه مسیر راهنمایی لازم داری؟</strong><p>از صفحه ارتباط با چکاد پیام بفرست تا راهنمایی شوی.</p></div>
           <Link href="/contact">ارتباط با چکاد <span aria-hidden="true">←</span></Link>
         </section>
-        <p className="student-dashboard-disclaimer">این پنل در نسخه فعلی، فهرست خدمات و اطلاعات حساب را نمایش می‌دهد. سابقه ثبت درخواست، پرداخت، رزرو جلسه و نتیجه آزمون پس از پیاده‌سازی سامانه‌های مربوط به آن‌ها اضافه خواهد شد.</p>
+        <p className="student-dashboard-disclaimer">این پنل، درخواست‌های ثبت‌شده را به حساب شخصی متصل می‌کند. یادداشت‌های داخلی تیم چکاد در پنل دانش‌آموز نمایش داده نمی‌شوند.</p>
       </div>
     </main>
   );

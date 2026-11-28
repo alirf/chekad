@@ -116,6 +116,7 @@ def public_student(student: StudentUser) -> StudentPublic:
         first_name=student.first_name,
         last_name=student.last_name,
         phone=student.phone,
+        guardian_phone=student.guardian_phone,
         grade=student.grade,
         field=student.field,
         phone_verified=student.phone_verified,

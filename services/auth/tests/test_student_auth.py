@@ -84,6 +84,7 @@ def test_student_login_profile_services_logout_and_admin_separation():
         me = client.get("/student/me")
         assert me.status_code == 200
         assert me.json()["first_name"] == "آرمان"
+        assert me.json()["guardian_phone"] == "09121112233"
 
         services = client.get("/student/services")
         assert services.status_code == 200

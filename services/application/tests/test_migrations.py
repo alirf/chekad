@@ -24,6 +24,7 @@ def test_initial_and_privacy_migrations_upgrade_cleanly(tmp_path, monkeypatch):
     }
 
     assert student_columns["phone"]["nullable"] is True
+    assert student_columns["auth_student_id"]["nullable"] is True
     assert mentorship_columns["guardian_consent_at"]["nullable"] is True
     assert mentorship_columns["privacy_accepted_at"]["nullable"] is True
     assert mentorship_columns["privacy_notice_version"]["nullable"] is True
@@ -34,5 +35,6 @@ def test_initial_and_privacy_migrations_upgrade_cleanly(tmp_path, monkeypatch):
     assert mentorship_columns["request_fingerprint"]["nullable"] is True
     assert tutoring_columns["idempotency_key"]["nullable"] is True
     assert tutoring_columns["request_fingerprint"]["nullable"] is True
+    assert any(index["name"] == "ix_students_auth_student_id" and index["unique"] for index in inspector.get_indexes("students"))
 
     engine.dispose()

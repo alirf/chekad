@@ -16,6 +16,8 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(Integer, primary_key=True)
+    # Stable identity from auth-service; no cross-database foreign key is possible.
+    auth_student_id = Column(Integer, unique=True, nullable=True, index=True)
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     # Student contact details are not requested in the public application flow.

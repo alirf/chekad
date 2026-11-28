@@ -1161,3 +1161,134 @@ img, svg { max-width: 100%; }
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Student-owned service requests */
+.request-auth-actions,
+.student-application-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.student-applications-section {
+  padding-top: 48px;
+}
+.student-applications-section .student-services-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.student-application-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 13px;
+  border: 1px solid #d7e3f0;
+  border-radius: 10px;
+  color: #245c98;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+}
+.student-application-actions a:hover {
+  border-color: #9db9d7;
+  background: #f5f9fe;
+}
+.student-applications-empty {
+  padding: 28px;
+  border: 1px dashed #cbd9e8;
+  border-radius: 16px;
+  background: rgba(255,255,255,.82);
+  text-align: center;
+}
+.student-applications-empty strong {
+  color: #1d3a58;
+  font-size: 15px;
+}
+.student-applications-empty p {
+  margin: 7px 0 0;
+  color: #75869b;
+  font-size: 13px;
+  line-height: 2;
+}
+.student-applications-list {
+  display: grid;
+  gap: 12px;
+}
+.student-application-card {
+  padding: 20px 22px;
+  border: 1px solid #dfe8f2;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(22,51,82,.04);
+}
+.student-application-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.student-application-kind {
+  color: #9b6b28;
+  font-size: 11px;
+  font-weight: 900;
+}
+.student-application-card h3 {
+  margin: 4px 0 0;
+  color: #183957;
+  font-size: 16px;
+  font-weight: 900;
+}
+.student-application-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 1px solid #dce5ef;
+  border-radius: 999px;
+  color: #536a82;
+  background: #f4f7fa;
+  font-size: 11px;
+  font-weight: 850;
+}
+.student-application-status.status-new { color: #536a82; background: #f4f7fa; }
+.student-application-status.status-reviewing { color: #245c98; background: #edf4fc; border-color: #d7e7f8; }
+.student-application-status.status-waiting_for_student { color: #96631d; background: #fff6e8; border-color: #f2dfbd; }
+.student-application-status.status-options_proposed { color: #725ab3; background: #f3effc; border-color: #e2daf6; }
+.student-application-status.status-accepted,
+.student-application-status.status-active { color: #16725a; background: #eaf7f1; border-color: #d0ecdf; }
+.student-application-status.status-completed { color: #4b657d; background: #f0f4f8; }
+.student-application-status.status-rejected,
+.student-application-status.status-cancelled { color: #9a4242; background: #fff1f1; border-color: #f1d8d8; }
+.student-application-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-top: 15px;
+  color: #7d8da0;
+  font-size: 11px;
+}
+.student-application-meta b {
+  color: #274c70;
+  font-weight: 900;
+}
+.student-application-details {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #edf1f6;
+  color: #667b91;
+  font-size: 12px;
+  line-height: 2;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 680px) {
+  .student-applications-section { padding-top: 36px; }
+  .student-application-card { padding: 16px; }
+  .student-applications-section .student-services-heading { align-items: flex-start; }
+  .student-application-actions { width: 100%; }
+}

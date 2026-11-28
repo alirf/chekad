@@ -26,7 +26,7 @@ app = FastAPI(
     version="0.4.0",
     description="Public application intake and admin workflow for Chekad.",
 )
-PRIVACY_NOTICE_VERSION = "2026-11-27-v1"
+PRIVACY_NOTICE_VERSION = "2026-11-28-v3"
 APPLICATION_STATUSES = {
     "new", "reviewing", "waiting_for_student", "options_proposed",
     "accepted", "active", "completed", "rejected", "cancelled",
@@ -109,22 +109,88 @@ async def require_admin(request: Request) -> dict:
     return admin
 
 
+async def require_student(request: Request) -> dict:
+    headers = {}
+    if request.headers.get("cookie"):
+        headers["Cookie"] = request.headers["cookie"]
+    if request.headers.get("authorization"):
+        headers["Authorization"] = request.headers["authorization"]
+    if not headers:
+        raise HTTPException(401, "برای ثبت و پیگیری درخواست وارد حساب دانش‌آموزی شوید.")
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(
+                settings.auth_internal_url.rstrip("/") + "/student/me",
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(503, "سرویس احراز هویت در دسترس نیست.") from exc
+
+    if response.status_code == 401:
+        raise HTTPException(401, "نشست دانش‌آموزی معتبر نیست؛ دوباره وارد شوید.")
+    if response.status_code != 200:
+        raise HTTPException(503, "اعتبارسنجی حساب دانش‌آموزی انجام نشد.")
+
+    try:
+        student = response.json()
+    except ValueError as exc:
+        raise HTTPException(503, "پاسخ سرویس احراز هویت معتبر نیست.") from exc
+
+    required = ("id", "first_name", "last_name", "grade", "field", "guardian_phone")
+    if (
+        not isinstance(student, dict)
+        or not isinstance(student.get("id"), int)
+        or any(not isinstance(student.get(key), str) or not student[key].strip() for key in required[1:])
+    ):
+        raise HTTPException(503, "اطلاعات حساب دانش‌آموزی کامل نیست.")
+    if student["field"] not in ("physics", "computer"):
+        raise HTTPException(503, "رشته المپیاد حساب معتبر نیست.")
+    return student
+
+
 def compose_notes(*items: tuple[str, str | None]) -> str | None:
     lines = [f"{label}: {value}" for label, value in items if value]
     return "\n".join(lines)[:2000] if lines else None
 
 
-def create_student(db: Session, payload) -> models.Student:
-    student = models.Student(
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        phone=None,
-        email=None,
-        grade=payload.grade,
-        field=payload.field,
-        parent_phone=payload.guardian_phone,
+def _normalized_mobile_tail(value: str) -> str:
+    digits = re.sub(r"\D", "", value)
+    return digits[-10:]
+
+
+def create_student(db: Session, payload, authenticated_student: dict) -> models.Student:
+    if payload.grade != authenticated_student["grade"] or payload.field != authenticated_student["field"]:
+        raise HTTPException(
+            422,
+            "پایه یا رشته فرم با اطلاعات حساب دانش‌آموزی مطابقت ندارد.",
+        )
+
+    if _normalized_mobile_tail(payload.guardian_phone) != _normalized_mobile_tail(authenticated_student["guardian_phone"]):
+        raise HTTPException(
+            422,
+            "شماره ولی یا سرپرست با شماره ثبت‌شده در حساب دانش‌آموزی مطابقت ندارد.",
+        )
+
+    student = (
+        db.query(models.Student)
+        .filter_by(auth_student_id=authenticated_student["id"])
+        .first()
     )
-    db.add(student)
+    if student is None:
+        student = models.Student(
+            auth_student_id=authenticated_student["id"],
+            phone=None,
+            email=None,
+        )
+        db.add(student)
+
+    # Authentication data is authoritative; form values cannot change account identity.
+    student.first_name = authenticated_student["first_name"]
+    student.last_name = authenticated_student["last_name"]
+    student.grade = authenticated_student["grade"]
+    student.field = authenticated_student["field"]
+    student.parent_phone = authenticated_student["guardian_phone"]
     db.flush()
     return student
 
@@ -139,7 +205,14 @@ def _fingerprint(payload) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _create_public_application(db: Session, payload, kind: str, key: str | None, response: Response) -> int:
+def _create_public_application(
+    db: Session,
+    payload,
+    kind: str,
+    key: str | None,
+    response: Response,
+    authenticated_student: dict,
+) -> int:
     if key is not None and not re.fullmatch(r"[A-Za-z0-9._:-]{16,64}", key):
         raise HTTPException(422, "کلید جلوگیری از ثبت تکراری معتبر نیست.")
 
@@ -149,16 +222,18 @@ def _create_public_application(db: Session, payload, kind: str, key: str | None,
     if key:
         existing = db.query(model).filter_by(idempotency_key=key).first()
         if existing:
+            if existing.student.auth_student_id != authenticated_student["id"]:
+                raise HTTPException(409, "این کلید قبلاً برای حساب دیگری استفاده شده است.")
             if existing.request_fingerprint != fingerprint:
                 raise HTTPException(409, "این کلید قبلاً برای اطلاعات دیگری استفاده شده است.")
             response.status_code = 200
             return existing.id
 
     try:
-        student = create_student(db, payload)
+        student = create_student(db, payload, authenticated_student)
         common = {
             "student_id": student.id,
-            "field": payload.field,
+            "field": student.field,
             "status": "new",
             "guardian_consent_at": utcnow(),
             "privacy_accepted_at": utcnow(),
@@ -189,11 +264,11 @@ def _create_public_application(db: Session, payload, kind: str, key: str | None,
         db.rollback()
         if key:
             existing = db.query(model).filter_by(idempotency_key=key).first()
-            if existing and existing.request_fingerprint == fingerprint:
+            if existing and existing.student.auth_student_id == authenticated_student["id"] and existing.request_fingerprint == fingerprint:
                 response.status_code = 200
                 return existing.id
             if existing:
-                raise HTTPException(409, "این کلید قبلاً برای اطلاعات دیگری استفاده شده است.") from exc
+                raise HTTPException(409, "این کلید قبلاً برای حساب یا اطلاعات دیگری استفاده شده است.") from exc
         raise HTTPException(503, "ثبت درخواست در حال حاضر ممکن نیست. لطفاً کمی بعد تلاش کنید.") from exc
     except SQLAlchemyError as exc:
         db.rollback()
@@ -258,9 +333,12 @@ def create_mentorship_application(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     _: None = Depends(require_public_intake),
     __: None = Depends(require_same_origin),
+    student: dict = Depends(require_student),
     db: Session = Depends(get_db),
 ):
-    request_id = _create_public_application(db, payload, "mentorship", idempotency_key, response)
+    request_id = _create_public_application(
+        db, payload, "mentorship", idempotency_key, response, student
+    )
     return PublicApplicationCreated(
         request_id=request_id,
         message="درخواست منتورینگ شما دریافت شد. کد پیگیری را نگه دارید.",
@@ -274,13 +352,75 @@ def create_tutoring_application(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     _: None = Depends(require_public_intake),
     __: None = Depends(require_same_origin),
+    student: dict = Depends(require_student),
     db: Session = Depends(get_db),
 ):
-    request_id = _create_public_application(db, payload, "tutoring", idempotency_key, response)
+    request_id = _create_public_application(
+        db, payload, "tutoring", idempotency_key, response, student
+    )
     return PublicApplicationCreated(
         request_id=request_id,
         message="درخواست کلاس خصوصی شما دریافت شد. کد پیگیری را نگه دارید.",
     )
+
+
+@app.get("/student/applications")
+def student_applications(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    profile = (
+        db.query(models.Student)
+        .filter_by(auth_student_id=student["id"])
+        .first()
+    )
+    if profile is None:
+        return {"items": [], "total": 0}
+
+    items = []
+    mentorship_rows = (
+        db.query(models.MentorshipApplication)
+        .filter_by(student_id=profile.id)
+        .order_by(models.MentorshipApplication.created_at.desc(), models.MentorshipApplication.id.desc())
+        .all()
+    )
+    tutoring_rows = (
+        db.query(models.TutoringApplication)
+        .filter_by(student_id=profile.id)
+        .order_by(models.TutoringApplication.created_at.desc(), models.TutoringApplication.id.desc())
+        .all()
+    )
+
+    for row in mentorship_rows:
+        items.append({
+            "id": row.id,
+            "kind": "mentorship",
+            "tracking_code": f"CH-{row.id:06d}",
+            "title": "درخواست منتورینگ",
+            "field": row.field,
+            "status": row.status,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "details": row.student_note,
+        })
+    for row in tutoring_rows:
+        items.append({
+            "id": row.id,
+            "kind": "tutoring",
+            "tracking_code": f"CH-{row.id:06d}",
+            "title": "درخواست کلاس خصوصی",
+            "field": row.field,
+            "status": row.status,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "details": compose_notes(
+                ("موضوع", row.topic),
+                ("توضیحات", row.description),
+            ),
+        })
+
+    items.sort(key=lambda item: (item["created_at"], item["id"]), reverse=True)
+    return {"items": items, "total": len(items)}
 
 
 @app.get("/admin/stats")

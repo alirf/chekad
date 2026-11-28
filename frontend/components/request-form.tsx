@@ -1,31 +1,18 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { ApiError, submitPublicApplication, type OlympiadField } from "../lib/api";
+import { ApiError, submitPublicApplication } from "../lib/api";
+import { fetchStudentProfile, StudentAuthError, type StudentProfile, type OlympiadField } from "../lib/student-auth";
 
 type RequestKind = "mentorship" | "tutoring";
 
-const grades = ["دهم", "یازدهم", "دوازدهم", "فارغ‌التحصیل", "سایر"];
-const fields: { value: OlympiadField; label: string }[] = [
-  { value: "physics", label: "المپیاد فیزیک" },
-  { value: "computer", label: "المپیاد کامپیوتر" },
-];
-
-export function RequestForm({
-  kind,
-  enabled,
-}: {
-  kind: RequestKind;
-  enabled: boolean;
-}) {
+export function RequestForm({ kind, enabled }: { kind: RequestKind; enabled: boolean }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [student, setStudent] = useState<StudentProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState("");
   const [step, setStep] = useState<1 | 2>(1);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [grade, setGrade] = useState("");
-  const [field, setField] = useState<OlympiadField | "">("");
-  const [guardianPhone, setGuardianPhone] = useState("");
   const [level, setLevel] = useState("");
   const [goal, setGoal] = useState("");
   const [topic, setTopic] = useState("");
@@ -37,6 +24,28 @@ export function RequestForm({
   const [success, setSuccess] = useState<{ requestId: number; message: string } | null>(null);
 
   const isMentorship = kind === "mentorship";
+
+  useEffect(() => {
+    let active = true;
+    fetchStudentProfile()
+      .then((profile) => {
+        if (active) setStudent(profile);
+      })
+      .catch((cause) => {
+        if (!active) return;
+        setProfileError(
+          cause instanceof StudentAuthError && cause.status === 401
+            ? "برای ثبت درخواست باید وارد حساب دانش‌آموزی خود شوی."
+            : cause instanceof Error
+              ? cause.message
+              : "دریافت اطلاعات حساب انجام نشد.",
+        );
+      })
+      .finally(() => {
+        if (active) setProfileLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   function goToNextStep() {
     if (formRef.current?.reportValidity()) {
@@ -50,21 +59,21 @@ export function RequestForm({
     setError("");
 
     const form = event.currentTarget;
-    if (!form.reportValidity() || submitting) return;
+    if (!form.reportValidity() || submitting || !student) return;
 
-    if (!guardianConsent || !privacyAccepted || !field) {
-      setError("تأیید سرپرست و پذیرش اطلاعیه حریم خصوصی الزامی است.");
+    if (!guardianConsent || !privacyAccepted) {
+      setError("تأیید رضایت ولی یا سرپرست و پذیرش اطلاعیه حریم خصوصی الزامی است.");
       return;
     }
 
     setSubmitting(true);
     try {
       const result = await submitPublicApplication(kind, {
-        first_name: firstName,
-        last_name: lastName,
-        grade,
-        field,
-        guardian_phone: guardianPhone,
+        first_name: student.first_name,
+        last_name: student.last_name,
+        grade: student.grade,
+        field: student.field as OlympiadField,
+        guardian_phone: student.guardian_phone,
         guardian_consent: true,
         privacy_accepted: true,
         ...(isMentorship ? { level: level || undefined } : { topic }),
@@ -97,6 +106,25 @@ export function RequestForm({
     );
   }
 
+  if (profileLoading) {
+    return <section className="request-form request-disabled" aria-live="polite"><p>در حال بررسی حساب دانش‌آموزی...</p></section>;
+  }
+
+  if (!student) {
+    return (
+      <section className="request-form request-disabled request-login-required" aria-live="polite">
+        <span className="eyebrow">STUDENT ACCOUNT REQUIRED</span>
+        <span className="disabled-icon" aria-hidden="true">◎</span>
+        <h2>درخواستت را از داخل حساب دانش‌آموزی ثبت کن.</h2>
+        <p>{profileError || "ابتدا وارد حساب شو تا درخواست منتورینگ یا کلاس خصوصی به پرونده خودت متصل شود و بعداً بتوانی وضعیت آن را در پنل پیگیری کنی."}</p>
+        <div className="request-auth-actions">
+          <Link className="button button-primary" href="/login">ورود به حساب</Link>
+          <Link className="button button-secondary" href="/register">ساخت حساب دانش‌آموزی</Link>
+        </div>
+      </section>
+    );
+  }
+
   if (success) {
     return (
       <section className="request-form request-success" aria-live="polite">
@@ -108,22 +136,24 @@ export function RequestForm({
           <span>کد پیگیری</span>
           <strong dir="ltr">CH-{String(success.requestId).padStart(6, "0")}</strong>
         </div>
-        <p className="form-footnote">این کد را برای پیگیری نزد خود نگه دار. اطلاعات تماس سرپرست فقط برای بررسی و پیگیری همین درخواست استفاده می‌شود.</p>
-        <Link className="button button-secondary" href="/privacy">مرور اطلاعیه حریم خصوصی</Link>
+        <p className="form-footnote">درخواست به حساب دانش‌آموزی تو متصل شد. از پنل دانش‌آموزی می‌توانی کد پیگیری و آخرین وضعیت آن را ببینی.</p>
+        <Link className="button button-primary" href="/dashboard">رفتن به پنل دانش‌آموزی</Link>
       </section>
     );
   }
+
+  const fieldLabel = student.field === "physics" ? "المپیاد فیزیک" : "المپیاد کامپیوتر";
 
   return (
     <form ref={formRef} className="request-form" onSubmit={handleSubmit} noValidate>
       <div className="form-heading">
         <span className="eyebrow">{isMentorship ? "فرم درخواست منتورینگ" : "فرم درخواست کلاس خصوصی"}</span>
-        <h2>{step === 1 ? "ابتدا مشخصات مسیر را وارد کن." : "نیاز و هدف را دقیق‌تر توضیح بده."}</h2>
-        <p>در نسخه فعلی، فرم توسط ولی یا سرپرست تکمیل می‌شود تا راه تماس مشخصی برای پیگیری درخواست وجود داشته باشد.</p>
+        <h2>{step === 1 ? "مشخصات حساب تو" : "نیاز و هدف را دقیق‌تر توضیح بده."}</h2>
+        <p>درخواست به حساب فعلی متصل می‌شود. مشخصات دانش‌آموز و شماره سرپرست از حساب خوانده می‌شوند و امکان تغییر آن‌ها در این فرم وجود ندارد.</p>
       </div>
 
       <div className="form-progress" aria-label={step === 1 ? "مرحله اول از دو مرحله" : "مرحله دوم از دو مرحله"}>
-        <div className={step === 1 ? "form-progress-item is-active" : "form-progress-item is-complete"}><span>۱</span>مشخصات مسیر</div>
+        <div className={step === 1 ? "form-progress-item is-active" : "form-progress-item is-complete"}><span>۱</span>مشخصات حساب</div>
         <i className={step === 2 ? "is-complete" : ""} />
         <div className={step === 2 ? "form-progress-item is-active" : "form-progress-item"}><span>۲</span>نیاز و تأیید</div>
       </div>
@@ -131,35 +161,25 @@ export function RequestForm({
       {step === 1 ? (
         <div className="form-grid form-step-panel">
           <div className="form-field">
-            <label htmlFor="student-first-name">نام دانش‌آموز <span>*</span></label>
-            <input id="student-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required minLength={2} maxLength={100} autoComplete="given-name" placeholder="نام" />
+            <label htmlFor="student-first-name">نام دانش‌آموز</label>
+            <input id="student-first-name" value={student.first_name} readOnly />
           </div>
-
           <div className="form-field">
-            <label htmlFor="student-last-name">نام خانوادگی <span>*</span></label>
-            <input id="student-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} required minLength={2} maxLength={100} autoComplete="family-name" placeholder="نام خانوادگی" />
+            <label htmlFor="student-last-name">نام خانوادگی</label>
+            <input id="student-last-name" value={student.last_name} readOnly />
           </div>
-
           <div className="form-field">
-            <label htmlFor="student-grade">پایه تحصیلی <span>*</span></label>
-            <select id="student-grade" value={grade} onChange={(event) => setGrade(event.target.value)} required>
-              <option value="">انتخاب پایه</option>
-              {grades.map((item) => <option value={item} key={item}>{item}</option>)}
-            </select>
+            <label htmlFor="student-grade">پایه تحصیلی</label>
+            <input id="student-grade" value={student.grade} readOnly />
           </div>
-
           <div className="form-field">
-            <label htmlFor="olympiad-field">رشته المپیاد <span>*</span></label>
-            <select id="olympiad-field" value={field} onChange={(event) => setField(event.target.value as OlympiadField | "")} required>
-              <option value="">انتخاب رشته</option>
-              {fields.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
-            </select>
+            <label htmlFor="olympiad-field">رشته المپیاد</label>
+            <input id="olympiad-field" value={fieldLabel} readOnly />
           </div>
-
           <div className="form-field form-field-full">
-            <label htmlFor="guardian-phone">شماره موبایل ولی یا سرپرست <span>*</span></label>
-            <input id="guardian-phone" value={guardianPhone} onChange={(event) => setGuardianPhone(event.target.value)} required type="tel" inputMode="tel" autoComplete="tel" dir="ltr" maxLength={20} placeholder="۰۹۱۲۳۴۵۶۷۸۹" />
-            <small>شماره شخصی دانش‌آموز دریافت نمی‌شود. این شماره فقط برای پیگیری درخواست استفاده خواهد شد.</small>
+            <label htmlFor="guardian-phone">شماره موبایل ولی یا سرپرست</label>
+            <input id="guardian-phone" value={student.guardian_phone} readOnly dir="ltr" />
+            <small>برای اصلاح این شماره، ابتدا اطلاعات حساب را از مسیر پشتیبانی چکاد پیگیری کن.</small>
           </div>
         </div>
       ) : (
@@ -195,13 +215,13 @@ export function RequestForm({
           <div className="form-field form-field-full consent-group">
             <label className="consent-check">
               <input type="checkbox" checked={guardianConsent} onChange={(event) => setGuardianConsent(event.target.checked)} required />
-              <span>به‌عنوان ولی یا سرپرست، با ثبت درخواست این دانش‌آموز و استفاده از شماره تماس خود برای پیگیری آن موافقم. <b>*</b></span>
+              <span>این درخواست با اطلاع و رضایت ولی یا سرپرست قانونی دانش‌آموز ثبت می‌شود و شماره تماس ثبت‌شده او برای پیگیری همین درخواست استفاده خواهد شد. <b>*</b></span>
             </label>
             <label className="consent-check">
               <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} required />
               <span><Link href="/privacy" target="_blank" rel="noreferrer">اطلاعیه حریم خصوصی</Link> را خوانده‌ام و با پردازش اطلاعات لازم برای بررسی این درخواست موافقم. <b>*</b></span>
             </label>
-            <p className="consent-note">این تأیید به‌صورت اظهار کاربر ثبت می‌شود و به‌تنهایی احراز هویت مستقل ولی یا سرپرست نیست. در این نسخه، فرم باید توسط خود ولی یا سرپرست تکمیل شود.</p>
+            <p className="consent-note">تأیید سرپرست در این فرم یک اظهار ثبت‌شده است و به‌تنهایی احراز هویت مستقل ولی یا سرپرست محسوب نمی‌شود.</p>
           </div>
         </div>
       )}
@@ -219,7 +239,7 @@ export function RequestForm({
             </button>
           </>
         )}
-        <span className="form-footnote">اطلاعات تماس سرپرست برای پیگیری درخواست ضروری است؛ اطلاعات حساس دیگری دریافت نمی‌شود.</span>
+        <span className="form-footnote">پس از ثبت، درخواست در پنل دانش‌آموزی و با کد پیگیری اختصاصی قابل مشاهده خواهد بود.</span>
       </div>
     </form>
   );
