@@ -1,11 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 
-const olympiadLinks = [
-  { href: "/olympiads/physics", label: "المپیاد فیزیک" },
-  { href: "/olympiads/computer", label: "المپیاد کامپیوتر" },
-];
-
 export function SiteHeader() {
   return (
     <>
@@ -13,51 +8,38 @@ export function SiteHeader() {
         <div className="container header-inner">
           <Link href="/" className="brand" aria-label="چکاد، صفحه اصلی">
             <Image
-              src="/chekad-logo.svg"
+              src="/chekad-logo-white.svg"
               alt="لوگوی چکاد"
-              width={72}
-              height={72}
-              className="brand-logo"
+              width={112}
+              height={112}
+              className="brand-logo brand-logo-header"
               priority
             />
           </Link>
 
           <nav className="desktop-nav" aria-label="ناوبری اصلی">
-            <Link href="/">صفحه اصلی</Link>
-            <details className="nav-dropdown">
-              <summary>المپیادها</summary>
-              <div className="dropdown-panel">
-                {olympiadLinks.map((item) => (
-                  <Link href={item.href} key={item.href}>{item.label}</Link>
-                ))}
-              </div>
-            </details>
-            <Link href="/mentorship">مشاوره و منتورینگ</Link>
-            <Link href="/exams">آزمون‌ها</Link>
-            <Link href="/blog">بلاگ</Link>
-            <Link href="/about">درباره چکاد</Link>
+            <Link href="/mentorship">مشاوران</Link>
+            <Link href="/tutoring">مدرسان</Link>
+            <Link href="/exams">آزمون</Link>
+            <Link href="/blog">مقالات</Link>
+            <Link href="/about">درباره ما</Link>
           </nav>
 
-          <Link className="button button-primary header-cta" href="/mentorship/apply">
-            درخواست مشاوره <span aria-hidden="true">←</span>
-          </Link>
+          <span className="header-auth-placeholder" aria-disabled="true" title="به‌زودی">
+            ورود / ثبت‌نام
+          </span>
 
           <details className="mobile-nav">
             <summary aria-label="باز کردن منوی سایت">
               <span className="menu-icon" aria-hidden="true"><i /><i /><i /></span>
             </summary>
             <nav className="mobile-nav-panel" aria-label="منوی موبایل">
-              <Link href="/">صفحه اصلی</Link>
-              {olympiadLinks.map((item) => (
-                <Link href={item.href} key={item.href}>{item.label}</Link>
-              ))}
-              <Link href="/mentorship">مشاوره و منتورینگ</Link>
-              <Link href="/tutoring">کلاس خصوصی</Link>
-              <Link href="/exams">آزمون‌ها</Link>
-              <Link href="/blog">بلاگ</Link>
-              <Link href="/about">درباره چکاد</Link>
-              <Link href="/contact">تماس با چکاد</Link>
-              <Link className="button button-primary mobile-menu-cta" href="/mentorship/apply">درخواست مشاوره</Link>
+              <Link href="/mentorship">مشاوران</Link>
+              <Link href="/tutoring">مدرسان</Link>
+              <Link href="/exams">آزمون</Link>
+              <Link href="/blog">مقالات</Link>
+              <Link href="/about">درباره ما</Link>
+              <span className="mobile-auth-placeholder" aria-disabled="true">ورود / ثبت‌نام (به‌زودی)</span>
             </nav>
           </details>
         </div>
@@ -66,7 +48,7 @@ export function SiteHeader() {
       <div className="mobile-action-bar">
         <div>
           <Link href="/mentorship/apply" className="button button-primary">درخواست مشاوره <span aria-hidden="true">←</span></Link>
-          <Link href="/exams" className="button button-secondary">آزمون‌ها</Link>
+          <Link href="/tutoring" className="button button-secondary">کلاس خصوصی</Link>
         </div>
       </div>
     </>
