@@ -117,13 +117,13 @@ export default function StudentRegisterPage() {
             </div>
             <label className="student-auth-check">
               <input type="checkbox" checked={guardianConsent} onChange={(event) => setGuardianConsent(event.target.checked)} />
-              <span>با اطلاع و رضایت ولی یا سرپرست قانونی ثبت‌نام می‌کنم و شماره تماس او را برای پیگیری در اختیار چکاد می‌گذارم.</span>
+              <span>ولی یا سرپرست قانونی‌ام این ثبت‌نام و اطلاعیه حریم خصوصی را دیده و برای ایجاد حساب دانش‌آموزی رضایت داده است.</span>
             </label>
             <label className="student-auth-check">
               <input type="checkbox" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} />
               <span>اطلاعیه <Link href="/privacy" target="_blank">حریم خصوصی</Link> را خوانده‌ام و با ثبت اطلاعات ضروری برای ایجاد حساب موافقم.</span>
             </label>
-            <p className="student-auth-notice">در این نسخه، ورود با رمز عبور انجام می‌شود و تأیید پیامکی شماره همراه هنوز به سرویس پیامک متصل نشده است. بازیابی خودکار رمز عبور نیز بعداً اضافه می‌شود.</p>
+            <p className="student-auth-notice">ولی یا سرپرست قانونی باید پیش از ثبت‌نام، فرم و اطلاعیه حریم خصوصی را بررسی و تأیید کند. در این نسخه، ورود با رمز عبور انجام می‌شود؛ تأیید پیامکی شماره همراه و بازیابی خودکار رمز هنوز پیاده‌سازی نشده‌اند. ثبت checkbox به‌تنهایی احراز مستقل سرپرست نیست.</p>
             {error && <p className="student-auth-error" role="alert">{error}</p>}
             <button type="submit" className="student-auth-submit" disabled={loading || !guardianConsent || !privacyAccepted}>
               {loading ? "در حال ساخت حساب..." : "ساخت حساب دانش‌آموزی"}

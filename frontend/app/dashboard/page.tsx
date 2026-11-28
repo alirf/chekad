@@ -70,7 +70,13 @@ export default function StudentDashboardPage() {
           <div><span>نام دانش‌آموز</span><strong>{student.first_name} {student.last_name}</strong></div>
           <div><span>پایه تحصیلی</span><strong>{student.grade}</strong></div>
           <div><span>مسیر المپیاد</span><strong>{fieldNames[student.field]}</strong></div>
-          <div><span>شماره همراه</span><strong dir="ltr">{student.phone}</strong></div>
+          <div>
+            <span>شماره همراه</span>
+            <strong dir="ltr">{student.phone}</strong>
+            <small className={student.phone_verified ? "student-phone-status is-verified" : "student-phone-status"}>
+              {student.phone_verified ? "شماره تأیید شده" : "شماره هنوز تأیید نشده"}
+            </small>
+          </div>
         </section>
 
         {error && <p className="student-dashboard-error" role="alert">{error}</p>}
