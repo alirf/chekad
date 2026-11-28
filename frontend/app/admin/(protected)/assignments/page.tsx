@@ -29,6 +29,12 @@ export default function AdminAssignmentsPage() {
   const [tutors, setTutors] = useState<Person[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [applicationId, setApplicationId] = useState("");
+  const [offerApplicationId, setOfferApplicationId] = useState("");
+  const [offerPersonId, setOfferPersonId] = useState("");
+  const [offerDescription, setOfferDescription] = useState("");
+  const [offerTerms, setOfferTerms] = useState("");
+  const [offerPrice, setOfferPrice] = useState("");
+  const [offerExpiresAt, setOfferExpiresAt] = useState("");
   const [personId, setPersonId] = useState("");
   const [startDate, setStartDate] = useState(today());
   const [endDate, setEndDate] = useState("");
@@ -46,6 +52,9 @@ export default function AdminAssignmentsPage() {
     return person.status === "active" && person.is_public && activeLoad < person.capacity;
   }), [people, assignments, kind]);
   const openApplications = useMemo(() => applications.filter((app) => app.kind === kind && app.status === "accepted"), [applications, kind]);
+  const proposalApplications = useMemo(() => applications.filter((app) => app.kind === kind && ["new", "reviewing", "waiting_for_student", "options_proposed"].includes(app.status)), [applications, kind]);
+  const selectedProposalApplication = proposalApplications.find((app) => app.id === Number(offerApplicationId));
+  const proposalPeople = filteredPeople.filter((person) => !selectedProposalApplication || person.field === selectedProposalApplication.field);
 
   const load = useCallback(async () => {
     const [appData, mentorData, tutorData, assignmentData] = await Promise.all([
@@ -109,6 +118,22 @@ export default function AdminAssignmentsPage() {
     finally { setBusy(false); }
   }
 
+  async function submitOffer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!offerApplicationId || !offerPersonId) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await json(await fetch("/api/application/admin/applications/" + kind + "/" + offerApplicationId + "/offers", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ person_id: Number(offerPersonId), description: offerDescription, terms: offerTerms, price_toman: offerPrice.trim() ? Number(offerPrice) : null, expires_at: offerExpiresAt ? localDateTimeWithOffset(offerExpiresAt) : null }),
+      }));
+      setNotice("پیشنهاد برای دانش‌آموز ارسال شد. پس از انتخاب او، درخواست وارد مرحله تخصیص می‌شود.");
+      setOfferPersonId(""); setOfferDescription(""); setOfferTerms(""); setOfferPrice(""); setOfferExpiresAt("");
+      await load();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "ثبت پیشنهاد انجام نشد."); }
+    finally { setBusy(false); }
+  }
   async function changeStatus(assignment: Assignment, nextStatus: "active" | "completed" | "cancelled") {
     setError(""); setNotice("");
     try {
@@ -127,6 +152,19 @@ export default function AdminAssignmentsPage() {
       <div><p className="text-xs font-bold tracking-widest text-blue-600">SERVICE ASSIGNMENTS</p><h1 className="mt-1 text-2xl font-black text-slate-900">تخصیص منتور و مدرس</h1><p className="mt-1 text-sm text-slate-500">پس از آن‌که دانش‌آموز پیشنهادها را در پیام‌رسان بررسی و انتخابش را تأیید کرد، درخواست پذیرفته‌شده را به منتور یا مدرس متناسب وصل کن.</p></div>
       {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
       {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-700">{notice}</div>}
+      <form onSubmit={submitOffer} className="grid gap-4 rounded-2xl border border-blue-100 bg-blue-50/40 p-5">
+        <div><h2 className="font-black text-slate-900">پیشنهاد منتور یا مدرس به دانش‌آموز</h2><p className="mt-1 text-xs text-slate-500">گزینه را همراه با توضیحات و شرایط ارسال کن. تا پیش از انتخاب صریح دانش‌آموز، امکان تخصیص وجود ندارد.</p></div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="grid gap-1 text-xs font-bold text-slate-600">نوع درخواست<select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setOfferApplicationId(""); setOfferPersonId(""); }} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="mentorship">منتورینگ</option><option value="tutoring">کلاس خصوصی</option></select></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">درخواست دانش‌آموز<select value={offerApplicationId} onChange={(event) => { setOfferApplicationId(event.target.value); setOfferPersonId(""); }} required className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">انتخاب درخواست</option>{proposalApplications.map((app) => <option key={app.id} value={app.id}>#{app.id} · {app.student.first_name} {app.student.last_name} · {app.field === "physics" ? "فیزیک" : "کامپیوتر"} · {app.tracking_code}</option>)}</select></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600 md:col-span-2">{kind === "mentorship" ? "منتور پیشنهادی" : "مدرس پیشنهادی"}<select value={offerPersonId} onChange={(event) => setOfferPersonId(event.target.value)} required className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm"><option value="">انتخاب فرد فعال و دارای ظرفیت</option>{proposalPeople.map((person) => <option key={person.id} value={person.id}>#{person.id} · {person.first_name} {person.last_name} · ظرفیت {assignments.filter((a) => a.kind === kind && a.person_id === person.id && a.status === "active").length}/{person.capacity}</option>)}</select></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600 md:col-span-2">معرفی و توضیحات<textarea value={offerDescription} onChange={(event) => setOfferDescription(event.target.value)} required minLength={10} maxLength={1200} rows={3} className="rounded-lg border border-slate-200 bg-white p-3 text-sm" placeholder="تخصص، تجربه و دلیل تناسب این همراه با نیاز دانش‌آموز..." /></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">هزینه (تومان، اختیاری)<input type="number" min="0" value={offerPrice} onChange={(event) => setOfferPrice(event.target.value)} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm" /></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600">مهلت انتخاب (اختیاری)<input type="datetime-local" value={offerExpiresAt} onChange={(event) => setOfferExpiresAt(event.target.value)} className="min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm" /></label>
+          <label className="grid gap-1 text-xs font-bold text-slate-600 md:col-span-2">شرایط همکاری<textarea value={offerTerms} onChange={(event) => setOfferTerms(event.target.value)} required minLength={3} maxLength={1600} rows={3} className="rounded-lg border border-slate-200 bg-white p-3 text-sm" placeholder="مدت همکاری، تعداد جلسات، مدت هر جلسه و سایر شرایط..." /></label>
+        </div>
+        <button type="submit" disabled={busy || !offerApplicationId || !offerPersonId || !offerDescription.trim() || !offerTerms.trim()} className="justify-self-start rounded-lg bg-blue-600 px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{busy ? "در حال ثبت..." : "ارسال پیشنهاد برای دانش‌آموز"}</button>
+      </form>
       <form onSubmit={submit} className="grid gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div><h2 className="font-black text-slate-900">تخصیص جدید</h2><p className="mt-1 text-xs text-slate-500">با ثبت این فرم، وضعیت درخواست به «فعال» تغییر می‌کند و دانش‌آموز می‌تواند با منتور خود پیام بدهد.</p></div>
         <div className="grid gap-3 md:grid-cols-2">
