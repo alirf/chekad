@@ -122,6 +122,14 @@ export default function StudentDashboardPage() {
         : "زمان جلسات و جزئیات همکاری را در پنل مرور کن.",
       label: "مشاهده کلاس‌ها", href: "/dashboard/classes",
     };
+  } else if (latestApplication && latestApplication.status === "active") {
+    nextStep = {
+      eyebrow: "ACTIVE SERVICE",
+      title: "همکاری آموزشی‌ات فعال شده است",
+      description: "جزئیات تخصیص و زمان‌بندی را از بخش کلاس‌ها بررسی کن. اگر اطلاعاتی هنوز نمایش داده نشده، با پشتیبانی چکاد در ارتباط باش.",
+      label: "مشاهده همکاری",
+      href: "/dashboard/classes",
+    };
   } else if (latestApplication && ["new", "reviewing", "accepted"].includes(latestApplication.status)) {
     nextStep = {
       eyebrow: "REQUEST IN PROGRESS",

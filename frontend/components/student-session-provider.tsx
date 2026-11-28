@@ -15,6 +15,7 @@ import {
   logoutStudent,
   StudentAuthError,
   STUDENT_SESSION_INVALID_EVENT,
+  recordStudentActivity,
   type StudentProfile,
 } from "../lib/student-auth";
 
@@ -122,6 +123,12 @@ export function StudentSessionProvider({ children }: { children: ReactNode }) {
     commitSession({ status: "guest", student: null });
     announceSessionChange();
   }, [announceSessionChange, commitSession]);
+
+  useEffect(() => {
+    if (session.status === "authenticated") {
+      void recordStudentActivity("session_started").catch(() => undefined);
+    }
+  }, [session.status]);
 
   useEffect(() => {
     void refreshSession();

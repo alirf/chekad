@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchStudentMessageThreads, recordStudentActivity, type StudentActivityEvent } from "../lib/student-auth";
 import { StudentNotificationIndicator } from "./student-notification-indicator";
 import { useStudentSession } from "./student-session-provider";
@@ -58,18 +58,10 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
   const [unread, setUnread] = useState(0);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
-  const sessionStartedRef = useRef(false);
   const studentName = student
     ? student.first_name + " " + student.last_name
     : "";
   const page = useMemo(() => pageTitles[pathname] || pageTitles["/dashboard"], [pathname]);
-
-  useEffect(() => {
-    if (status === "authenticated" && !sessionStartedRef.current) {
-      sessionStartedRef.current = true;
-      void recordStudentActivity("session_started").catch(() => undefined);
-    }
-  }, [status]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
