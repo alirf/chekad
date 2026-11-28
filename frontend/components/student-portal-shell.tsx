@@ -23,12 +23,12 @@ const navigation = [
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   "/dashboard": { title: "صفحه شخصی", subtitle: "مرور وضعیت و فعالیت‌های مسیر المپیاد" },
-  "/dashboard/messages": { title: "پیام‌ها", subtitle: "گفت‌وگو با پشتیبانی چکاد و مشاور" },
+  "/dashboard/messages": { title: "پیام‌ها", subtitle: "گفت‌وگو با پشتیبانی، منتور و مدرس خصوصی" },
   "/dashboard/classes": { title: "کلاس‌ها", subtitle: "کلاس‌های خصوصی و جلسات برنامه‌ریزی‌شده" },
   "/dashboard/exams": { title: "آزمون‌ها", subtitle: "دسترسی به آزمون‌های منتشرشده چکاد" },
   "/dashboard/weekly-plan": { title: "برنامه هفتگی", subtitle: "برنامه مطالعه و فعالیت‌های هفته" },
   "/dashboard/reports": { title: "ثبت گزارش", subtitle: "ثبت عملکرد و مرور روند مطالعه" },
-  "/dashboard/calendar": { title: "تقویم برنامه‌ها", subtitle: "نمای یکپارچه جلسات و برنامه مطالعه" },
+  "/dashboard/calendar": { title: "تقویم کلاس‌ها و آزمون‌ها", subtitle: "زمان جلسات و آزمون‌های ثبت‌نام‌شده در ماه" },
   "/dashboard/invoices": { title: "فاکتورها", subtitle: "صورتحساب‌ها و سوابق مالی خدمات" },
 };
 
