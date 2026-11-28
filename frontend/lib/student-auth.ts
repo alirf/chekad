@@ -128,7 +128,8 @@ export async function logoutStudent() {
 
 export interface PortalMessageThread {
   id: number;
-  channel: "support" | "advisor";
+  channel: "support" | "advisor" | "teacher";
+  tutor_assignment_id?: number | null;
   advisor_assignment_id?: number | null;
   subject: string;
   status: "open" | "closed";
@@ -137,7 +138,7 @@ export interface PortalMessageThread {
 }
 export interface PortalMessage {
   id: number;
-  sender_type: "student" | "admin" | "mentor";
+  sender_type: "student" | "admin" | "mentor" | "teacher";
   sender_id: number;
   body: string;
   created_at: string;
@@ -165,7 +166,7 @@ export interface StudentStudyTask {
 }
 export interface StudentScheduleEvent {
   id: string;
-  category: "mentorship" | "tutoring" | "study";
+  category: "mentorship" | "tutoring" | "study" | "exam";
   title: string;
   starts_at: string;
   duration_minutes?: number | null;
@@ -291,4 +292,79 @@ export interface StudentMentorReport {
 }
 export async function fetchStudentMentorReports() {
   return requestJson<{ items: StudentMentorReport[]; total: number }>("/application/student/mentor-reports");
+}
+
+
+export interface AssignedWeeklyTask extends StudentStudyTask {
+  student_auth_id: number;
+  mentor_assignment_id?: number | null;
+  tutor_assignment_id?: number | null;
+  assignment_kind: "mentorship" | "tutoring" | "personal";
+  source_type: "student" | "mentor" | "teacher";
+}
+
+export async function fetchStudentWeeklyPlan(start?: string, end?: string) {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  return requestJson<{ items: AssignedWeeklyTask[]; total: number }>(
+    "/application/student/weekly-plan" + (params.size ? "?" + params.toString() : ""),
+  );
+}
+
+export async function updateAssignedWeeklyTaskStatus(
+  taskId: number,
+  status: AssignedWeeklyTask["status"],
+) {
+  return requestJson<AssignedWeeklyTask>("/application/student/weekly-plan/" + taskId, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function checkStudentTeacherAvailability() {
+  return requestJson<{
+    available: boolean;
+    assignment: {
+      id: number;
+      teacher_name?: string | null;
+      topic: string;
+      field: OlympiadField;
+    } | null;
+  }>("/application/student/messages/teacher");
+}
+
+export async function createStudentTeacherThread() {
+  return requestJson<PortalMessageThread>("/application/student/messages/teacher", {
+    method: "POST",
+  });
+}
+
+export function openPortalMessageSocket(
+  role: "student" | "mentor" | "teacher" | "admin",
+  threadId: number,
+  onMessage: (message: PortalMessage) => void,
+  onOpen?: () => void,
+  onClose?: () => void,
+): WebSocket {
+  const socketUrl = new URL(
+    API_BASE + "/application/" + role + "/messages/threads/" + threadId + "/ws",
+    window.location.href,
+  );
+  socketUrl.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(socketUrl.toString());
+  socket.addEventListener("open", () => onOpen?.());
+  socket.addEventListener("close", () => onClose?.());
+  socket.addEventListener("message", (event) => {
+    try {
+      const payload = JSON.parse(String(event.data)) as {
+        type?: string;
+        message?: PortalMessage;
+      };
+      if (payload.type === "message" && payload.message) onMessage(payload.message);
+    } catch {
+      // Ignore malformed frames while keeping the connection alive.
+    }
+  });
+  return socket;
 }

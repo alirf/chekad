@@ -1643,3 +1643,23 @@ body:has(.student-portal-shell) { padding-bottom:0 !important; }
   .student-exam-card-main { flex-direction:column; }
   .student-exam-status { justify-items:start; }
 }
+
+
+/* Role-aware weekly planner labels and shared realtime messenger details */
+.student-week-source { display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; font-size:9px; font-weight:800; }
+.student-week-source.source-student { color:#2361ad; background:#edf5ff; }
+.student-week-source.source-mentor { color:#277354; background:#eef9f3; }
+.student-week-source.source-teacher { color:#986a2c; background:#fff6e8; }
+.student-week-task-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.student-week-task-actions button { padding:6px 9px; border:1px solid #e6ebf0; border-radius:8px; color:#63758a; background:#fff; font-size:9px; font-weight:700; }
+.student-week-task-actions button:disabled { opacity:.45; }
+.student-week-task.is-completed { background:#fbfdfb; }
+.student-week-task.is-completed .student-week-task-main strong { color:#6f8b7b; }
+.student-message-bubble.from-teacher { background:#fff8ed; border-color:#f0dfc2; }
+.student-messenger-online { display:inline-flex; align-items:center; gap:6px; }
+.student-messenger-online i { width:7px; height:7px; display:inline-block; border-radius:50%; background:#26a879; }
+@media (max-width: 700px) {
+  .student-week-task { align-items:flex-start; flex-wrap:wrap; }
+  .student-week-task-main { min-width:100%; }
+  .student-week-task-actions { width:100%; }
+}

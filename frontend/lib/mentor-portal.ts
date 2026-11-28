@@ -72,3 +72,48 @@ export async function createMentorWeeklyReport(assignmentId: number, weekNumber:
     body: JSON.stringify({ week_number: weekNumber, content }),
   });
 }
+
+
+export interface ManagedStudyTask {
+  id: number;
+  student_auth_id: number;
+  mentor_assignment_id?: number | null;
+  tutor_assignment_id?: number | null;
+  assignment_kind: "mentorship" | "tutoring";
+  title: string;
+  description?: string | null;
+  planned_at: string;
+  duration_minutes: number;
+  status: "pending" | "completed" | "skipped";
+  created_at: string;
+  updated_at: string;
+}
+export async function fetchMentorWeeklyPlan(assignmentId: number, start?: string, end?: string) {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  return request<{ items: ManagedStudyTask[]; total: number }>(
+    "/mentor/assignments/" + assignmentId + "/weekly-plan" + (params.size ? "?" + params.toString() : ""),
+  );
+}
+export async function createMentorWeeklyTask(assignmentId: number, payload: {
+  title: string; description?: string; planned_at: string; duration_minutes: number;
+}) {
+  return request<ManagedStudyTask>("/mentor/assignments/" + assignmentId + "/weekly-plan", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+export async function updateMentorWeeklyTask(assignmentId: number, taskId: number, payload: Partial<{
+  title: string; description: string; planned_at: string; duration_minutes: number;
+}>) {
+  return request<ManagedStudyTask>("/mentor/assignments/" + assignmentId + "/weekly-plan/" + taskId, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+export async function deleteMentorWeeklyTask(assignmentId: number, taskId: number) {
+  return request<{ deleted: boolean }>("/mentor/assignments/" + assignmentId + "/weekly-plan/" + taskId, {
+    method: "DELETE",
+  });
+}

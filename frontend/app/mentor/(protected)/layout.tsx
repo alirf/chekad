@@ -29,12 +29,14 @@ export default async function MentorProtectedLayout({ children }: { children: Re
     <div dir="rtl" className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <Link href="/mentor/messages" className="flex items-center gap-3">
+          <Link href="/mentor" className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-xl font-black text-white">چ</span>
             <span><strong className="block text-sm font-black text-slate-900">چکاد</strong><small className="text-[10px] text-slate-500">پنل مشاور و منتور</small></span>
           </Link>
-          <nav className="flex items-center gap-3 text-xs font-bold text-slate-600">
+          <nav className="flex flex-wrap items-center gap-1 text-xs font-bold text-slate-600">
+            <Link href="/mentor" className="rounded-lg px-3 py-2 hover:bg-blue-50 hover:text-blue-700">خانه</Link>
             <Link href="/mentor/messages" className="rounded-lg px-3 py-2 hover:bg-blue-50 hover:text-blue-700">پیام‌ها</Link>
+            <Link href="/mentor/weekly-plan" className="rounded-lg px-3 py-2 hover:bg-blue-50 hover:text-blue-700">برنامه هفتگی</Link>
             <Link href="/mentor/reports" className="rounded-lg px-3 py-2 hover:bg-blue-50 hover:text-blue-700">گزارش‌ها و پیشرفت</Link>
             <span className="hidden text-slate-400 sm:inline">{mentor.display_name}</span>
             <MentorLogoutButton />

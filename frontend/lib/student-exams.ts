@@ -72,3 +72,78 @@ export async function cancelExamRegistration(examId: number) {
     { method: "DELETE" },
   );
 }
+
+
+export interface StudentExamQuestion {
+  id: number;
+  position: number;
+  question_type: "single_choice" | "written";
+  prompt: string;
+  options?: string[] | null;
+  points: number;
+  answer_text?: string;
+}
+
+export interface StudentExamAttempt {
+  id: number;
+  exam_id: number;
+  exam_title?: string;
+  status: "in_progress" | "submitted" | "graded";
+  started_at: string;
+  deadline_at: string;
+  submitted_at?: string | null;
+  max_score: number;
+  earned_score?: number | null;
+  results_published: boolean;
+  questions?: StudentExamQuestion[];
+}
+
+export interface StudentExamResult {
+  exam_id: number;
+  exam_title: string;
+  attempt_id: number;
+  submitted_at: string;
+  earned_score: number;
+  max_score: number;
+  percentage: number;
+  answers: Array<{
+    question_id: number;
+    position: number;
+    prompt: string;
+    answer_text: string;
+    is_correct?: boolean | null;
+    earned_points?: number | null;
+    max_points: number;
+    grader_note?: string | null;
+    correct_answer?: string | null;
+  }>;
+}
+
+export async function fetchStudentExamCalendar() {
+  return request<{ items: import("./student-auth").StudentScheduleEvent[]; total: number }>("/student/calendar");
+}
+export async function startStudentExam(examId: number) {
+  return request<StudentExamAttempt>("/student/exams/" + examId + "/attempt/start", { method: "POST" });
+}
+export async function fetchStudentExamAttempt(examId: number) {
+  return request<StudentExamAttempt>("/student/exams/" + examId + "/attempt");
+}
+export async function saveStudentExamAnswers(
+  examId: number,
+  answers: Array<{ question_id: number; answer_text: string }>,
+) {
+  return request<{ saved: number; saved_at: string }>("/student/exams/" + examId + "/attempt/answers", {
+    method: "PUT",
+    body: JSON.stringify({ answers }),
+  });
+}
+export async function submitStudentExam(examId: number) {
+  return request<{
+    status: "submitted" | "graded";
+    submitted_at: string;
+    results_published: boolean;
+  }>("/student/exams/" + examId + "/attempt/submit", { method: "POST" });
+}
+export async function fetchStudentExamResult(examId: number) {
+  return request<StudentExamResult>("/student/exams/" + examId + "/result");
+}

@@ -76,7 +76,10 @@ export default function StudentExamsPage() {
                 {exam.is_registered && exam.registered_at && <span>تاریخ ثبت‌نام: {formatPortalDateTime(exam.registered_at)}</span>}
               </div>
               <div className="student-exam-actions">
-                {exam.is_registered ? <button type="button" className="student-portal-button secondary" onClick={() => cancel(exam)} disabled={busyId === exam.id}>{busyId === exam.id ? "در حال انجام..." : "لغو ثبت‌نام"}</button> :
+                {exam.is_registered ? <>
+                  <Link className="student-portal-button primary" href={"/dashboard/exams/" + exam.id}>ورود به آزمون / کارنامه</Link>
+                  <button type="button" className="student-portal-button secondary" onClick={() => cancel(exam)} disabled={busyId === exam.id}>{busyId === exam.id ? "در حال انجام..." : "لغو ثبت‌نام"}</button>
+                </> :
                   <button type="button" className="student-portal-button primary" onClick={() => register(exam)} disabled={!exam.can_register || busyId === exam.id}>{busyId === exam.id ? "در حال ثبت..." : "ثبت‌نام در آزمون"}</button>}
                 {exam.registration_url && <a className="student-portal-button secondary" href={exam.registration_url} target="_blank" rel="noreferrer">اطلاعیه / جزئیات</a>}
               </div>
