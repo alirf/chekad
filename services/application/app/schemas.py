@@ -319,4 +319,4 @@ class ManagedStudyTaskUpdate(BaseModel):
 
 
 class StudentAssignedTaskStatus(BaseModel):
-    status: Literal["pending", "completed", "skipped"]
+    status: Literal["completed"]

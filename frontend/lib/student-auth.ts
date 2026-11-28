@@ -60,7 +60,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(API_BASE + path, {
       ...init,
-      credentials: "same-origin",
+      credentials: "include",
       headers: {
         Accept: "application/json",
         ...(init?.body ? { "Content-Type": "application/json" } : {}),
@@ -76,7 +76,13 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const detail = typeof result.detail === "string" ? result.detail : "";
     if (response.status === 401) {
-      throw new StudentAuthError("شماره همراه یا رمز عبور صحیح نیست.", response.status);
+      const isLoginRequest = path === "/auth/student/login";
+      throw new StudentAuthError(
+        isLoginRequest
+          ? "شماره همراه یا رمز عبور صحیح نیست."
+          : "نشست دانش‌آموزی معتبر نیست یا منقضی شده است. دوباره وارد حساب شوید.",
+        response.status,
+      );
     }
     if (response.status === 409) {
       throw new StudentAuthError(detail || "این شماره همراه قبلاً ثبت شده است.", response.status);
@@ -218,33 +224,6 @@ export async function createStudentReport(payload: Omit<StudentStudyReport, "id"
     body: JSON.stringify(payload),
   });
 }
-export async function fetchStudentStudyTasks(start?: string, end?: string) {
-  const params = new URLSearchParams();
-  if (start) params.set("start", start);
-  if (end) params.set("end", end);
-  const suffix = params.toString() ? "?" + params.toString() : "";
-  return requestJson<{ items: StudentStudyTask[]; total: number }>("/application/student/study-tasks" + suffix);
-}
-export async function createStudentStudyTask(payload: {
-  title: string;
-  description?: string;
-  planned_at: string;
-  duration_minutes: number;
-}) {
-  return requestJson<StudentStudyTask>("/application/student/study-tasks", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-export async function updateStudentStudyTask(taskId: number, payload: Partial<Pick<StudentStudyTask, "title" | "description" | "planned_at" | "duration_minutes" | "status">>) {
-  return requestJson<StudentStudyTask>("/application/student/study-tasks/" + taskId, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-}
-export async function deleteStudentStudyTask(taskId: number) {
-  return requestJson<void>("/application/student/study-tasks/" + taskId, { method: "DELETE" });
-}
 export async function fetchStudentSchedule() {
   const result = await requestJson<{ items: StudentScheduleEvent[]; total: number }>("/application/student/schedule");
   return { ...result, fetched_at: new Date().toISOString() };
@@ -314,7 +293,7 @@ export async function fetchStudentWeeklyPlan(start?: string, end?: string) {
 
 export async function updateAssignedWeeklyTaskStatus(
   taskId: number,
-  status: AssignedWeeklyTask["status"],
+  status: "completed",
 ) {
   return requestJson<AssignedWeeklyTask>("/application/student/weekly-plan/" + taskId, {
     method: "PATCH",

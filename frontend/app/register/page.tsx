@@ -2,11 +2,9 @@
 
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
-import { registerStudent, StudentAuthError, StudentGrade, OlympiadField } from "../../lib/student-auth";
+import { fetchStudentProfile, registerStudent, StudentAuthError, StudentGrade, OlympiadField } from "../../lib/student-auth";
 
 export default function StudentRegisterPage() {
-  const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -38,19 +36,22 @@ export default function StudentRegisterPage() {
 
     setLoading(true);
     try {
-      await registerStudent({
+      const result = await registerStudent({
         first_name: firstName,
         last_name: lastName,
-        phone,
-        guardian_phone: guardianPhone,
+        phone: phone.trim(),
+        guardian_phone: guardianPhone.trim(),
         grade,
         field,
         password,
         guardian_consent: true,
         privacy_accepted: true,
       });
-      router.replace("/dashboard");
-      router.refresh();
+      const session = await fetchStudentProfile();
+      if (session.id !== result.student.id) {
+        throw new StudentAuthError("حساب ساخته شد، اما نشست مرورگر تأیید نشد. نشانی سایت و تنظیم کوکی محلی را بررسی کنید.");
+      }
+      window.location.replace("/dashboard");
     } catch (cause) {
       setError(cause instanceof StudentAuthError ? cause.message : "ثبت‌نام انجام نشد. دوباره تلاش کنید.");
     } finally {

@@ -168,7 +168,7 @@ def test_student_can_create_and_retrieve_only_own_study_reports(client):
     assert other.json()["total"] == 0
 
 
-def test_weekly_plan_tasks_are_owned_and_never_appear_in_monthly_calendar(client):
+def test_student_cannot_create_or_edit_weekly_plan_and_weekly_plan_is_not_monthly_calendar(client):
     created = client.post(
         "/student/study-tasks",
         json={
@@ -179,37 +179,29 @@ def test_weekly_plan_tasks_are_owned_and_never_appear_in_monthly_calendar(client
         },
         headers=origin_headers(),
     )
-    assert created.status_code == 201
-    task_id = created.json()["id"]
-
-    updated = client.patch(
-        f"/student/study-tasks/{task_id}",
-        json={"status": "completed"},
-        headers=origin_headers(),
-    )
-    assert updated.status_code == 200
-    assert updated.json()["status"] == "completed"
+    assert created.status_code == 403
 
     weekly_plan = client.get("/student/weekly-plan")
     assert weekly_plan.status_code == 200
-    assert weekly_plan.json()["total"] == 1
-    assert weekly_plan.json()["items"][0]["source_type"] == "student"
-    assert weekly_plan.json()["items"][0]["assignment_kind"] == "personal"
-    assert weekly_plan.json()["items"][0]["id"] == task_id
+    assert weekly_plan.json()["total"] == 0
+    assert weekly_plan.json()["items"] == []
 
-    # Personal study tasks are not calendar events; only scheduled classes and exams belong there.
+    assert client.get("/student/study-tasks").status_code == 410
+    assert client.patch(
+        "/student/study-tasks/1",
+        json={"title": "تغییر غیرمجاز"},
+        headers=origin_headers(),
+    ).status_code == 403
+    assert client.delete(
+        "/student/study-tasks/1",
+        headers=origin_headers(),
+    ).status_code == 403
+
     calendar = client.get("/student/schedule")
     assert calendar.status_code == 200
     assert calendar.json()["total"] == 0
 
     CURRENT_STUDENT["id"] = 99
-    hidden = client.patch(
-        f"/student/study-tasks/{task_id}",
-        json={"status": "pending"},
-        headers=origin_headers(),
-    )
-    assert hidden.status_code == 404
-    assert client.get("/student/study-tasks").json()["total"] == 0
     assert client.get("/student/weekly-plan").json()["total"] == 0
 
 
@@ -627,7 +619,8 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
     assert student_plan.json()["total"] == 1
     assert student_plan.json()["items"][0]["mentor_assignment_id"] == assignment_id
 
-    # Students may mark progress, but cannot create or edit the mentor-authored plan.
+    # Students cannot add or edit plan content. The only permitted mutation
+    # is acknowledging completion of an assigned activity.
     legacy_task = client.post(
         "/student/study-tasks",
         headers={"Origin": "http://testserver"},
@@ -637,13 +630,32 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
             "duration_minutes": 45,
         },
     )
-    assert legacy_task.status_code == 201
+    assert legacy_task.status_code == 403
     student_plan_again = client.get("/student/weekly-plan")
-    assert student_plan_again.json()["total"] == 2
-    source_types = {item["source_type"] for item in student_plan_again.json()["items"]}
-    assert source_types == {"student", "mentor"}
-    assert any(item["assignment_kind"] == "personal" for item in student_plan_again.json()["items"])
-    assert any(item["mentor_assignment_id"] == assignment_id for item in student_plan_again.json()["items"])
+    assert student_plan_again.json()["total"] == 1
+    assert student_plan_again.json()["items"][0]["source_type"] == "mentor"
+    assert student_plan_again.json()["items"][0]["mentor_assignment_id"] == assignment_id
+
+    task_id = student_plan_again.json()["items"][0]["id"]
+    assert client.patch(
+        f"/student/weekly-plan/{task_id}",
+        json={"status": "pending"},
+        headers={"Origin": "http://testserver"},
+    ).status_code == 422
+    assert client.patch(
+        f"/student/weekly-plan/{task_id}",
+        json={"status": "skipped"},
+        headers={"Origin": "http://testserver"},
+    ).status_code == 422
+
+    completed = client.patch(
+        f"/student/weekly-plan/{task_id}",
+        json={"status": "completed"},
+        headers={"Origin": "http://testserver"},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "completed"
+    assert db_session.get(AssignedStudyTask, task_id).status == "completed"
     assert db_session.query(AssignedStudyTask).count() == 1
 
 

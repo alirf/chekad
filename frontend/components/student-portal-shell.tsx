@@ -82,7 +82,7 @@ export function StudentPortalShell({ children }: { children: ReactNode }) {
         if (active) setChecking(false);
       });
     return () => { active = false; };
-  }, [router, pathname]);
+  }, [router]);
 
   async function handleLogout() {
     setLoggingOut(true);

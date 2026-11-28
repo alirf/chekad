@@ -28,8 +28,6 @@ from app.schemas import (
     StudentMessageCreate,
     StudentMessageThreadCreate,
     StudentStudyReportCreate,
-    StudentStudyTaskCreate,
-    StudentStudyTaskUpdate,
     ManagedStudyTaskCreate,
     ManagedStudyTaskUpdate,
     StudentAssignedTaskStatus,
@@ -1016,95 +1014,37 @@ def admin_student_reports(
     }
 
 
-def _serialize_study_task(task: models.StudentStudyTask) -> dict:
-    return {
-        "id": task.id,
-        "title": task.title,
-        "description": task.description,
-        "planned_at": task.planned_at,
-        "duration_minutes": task.duration_minutes,
-        "status": task.status,
-        "created_at": task.created_at,
-        "updated_at": task.updated_at,
-    }
-
-
 @app.get("/student/study-tasks")
-def student_study_tasks(
-    start: datetime | None = None,
-    end: datetime | None = None,
+def retired_student_study_tasks(
     student: dict = Depends(require_student),
-    db: Session = Depends(get_db),
 ):
-    query = db.query(models.StudentStudyTask).filter_by(student_auth_id=student["id"])
-    if start is not None:
-        query = query.filter(models.StudentStudyTask.planned_at >= start)
-    if end is not None:
-        query = query.filter(models.StudentStudyTask.planned_at < end)
-    rows = query.order_by(models.StudentStudyTask.planned_at.asc()).limit(250).all()
-    return {"items": [_serialize_study_task(row) for row in rows], "total": len(rows)}
-
-
-@app.post("/student/study-tasks", status_code=201)
-def create_student_study_task(
-    payload: StudentStudyTaskCreate,
-    request: Request,
-    student: dict = Depends(require_student),
-    db: Session = Depends(get_db),
-):
-    require_portal_same_origin(request)
-    task = models.StudentStudyTask(
-        student_auth_id=student["id"],
-        **payload.model_dump(),
+    raise HTTPException(
+        status_code=410,
+        detail="برنامه هفتگی توسط مشاور یا مدرس تنظیم می‌شود؛ از مسیر /student/weekly-plan استفاده کنید.",
     )
-    db.add(task)
-    try:
-        db.commit()
-        db.refresh(task)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(503, "ثبت برنامه انجام نشد.") from exc
-    return _serialize_study_task(task)
 
 
-@app.patch("/student/study-tasks/{task_id}")
-def update_student_study_task(
-    task_id: int,
-    payload: StudentStudyTaskUpdate,
-    request: Request,
+@app.post("/student/study-tasks", status_code=403)
+def deny_student_study_task_creation(
     student: dict = Depends(require_student),
-    db: Session = Depends(get_db),
 ):
-    require_portal_same_origin(request)
-    task = db.query(models.StudentStudyTask).filter_by(id=task_id, student_auth_id=student["id"]).first()
-    if task is None:
-        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(task, key, value)
-    task.updated_at = utcnow()
-    try:
-        db.commit()
-        db.refresh(task)
-    except SQLAlchemyError as exc:
-        db.rollback()
-        raise HTTPException(503, "به‌روزرسانی برنامه انجام نشد.") from exc
-    return _serialize_study_task(task)
+    raise HTTPException(403, "دانش‌آموز اجازه افزودن فعالیت به برنامه هفتگی را ندارد.")
 
 
-@app.delete("/student/study-tasks/{task_id}", status_code=204)
-def delete_student_study_task(
+@app.patch("/student/study-tasks/{task_id}", status_code=403)
+def deny_student_study_task_update(
     task_id: int,
-    request: Request,
     student: dict = Depends(require_student),
-    db: Session = Depends(get_db),
 ):
-    require_portal_same_origin(request)
-    task = db.query(models.StudentStudyTask).filter_by(id=task_id, student_auth_id=student["id"]).first()
-    if task is None:
-        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
-    db.delete(task)
-    db.commit()
-    return Response(status_code=204)
+    raise HTTPException(403, "دانش‌آموز اجازه ویرایش برنامه هفتگی را ندارد.")
+
+
+@app.delete("/student/study-tasks/{task_id}", status_code=403)
+def deny_student_study_task_deletion(
+    task_id: int,
+    student: dict = Depends(require_student),
+):
+    raise HTTPException(403, "دانش‌آموز اجازه حذف فعالیت‌های برنامه هفتگی را ندارد.")
 
 
 @app.get("/student/schedule")
@@ -2239,7 +2179,7 @@ def student_weekly_plan(
     student: dict = Depends(require_student),
     db: Session = Depends(get_db),
 ):
-    """Combine the student's personal planner with assigned mentor/teacher tasks."""
+    """Return only activities assigned by the student's active mentor or teacher."""
     profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
     mentor_ids = []
     tutor_ids = []
@@ -2263,29 +2203,7 @@ def student_weekly_plan(
             .all()
         ]
 
-    personal_query = db.query(models.StudentStudyTask).filter_by(student_auth_id=student["id"])
-    if start is not None:
-        if start.tzinfo is None or start.utcoffset() is None:
-            raise HTTPException(422, "زمان شروع بازه باید منطقه زمانی داشته باشد.")
-        personal_query = personal_query.filter(models.StudentStudyTask.planned_at >= start)
-    if end is not None:
-        if end.tzinfo is None or end.utcoffset() is None:
-            raise HTTPException(422, "زمان پایان بازه باید منطقه زمانی داشته باشد.")
-        personal_query = personal_query.filter(models.StudentStudyTask.planned_at < end)
-    personal_rows = personal_query.order_by(
-        models.StudentStudyTask.planned_at.asc(), models.StudentStudyTask.id.asc()
-    ).limit(500).all()
-
     items = []
-    for row in personal_rows:
-        items.append({
-            **_serialize_study_task(row),
-            "student_auth_id": student["id"],
-            "mentor_assignment_id": None,
-            "tutor_assignment_id": None,
-            "assignment_kind": "personal",
-            "source_type": "student",
-        })
 
     assigned_query = db.query(models.AssignedStudyTask).filter(
         models.AssignedStudyTask.student_auth_id == student["id"],
@@ -2330,7 +2248,9 @@ def update_student_assigned_task_status(
         assignment = db.get(models.TutorAssignment, task.tutor_assignment_id)
     if assignment is None or assignment.status != "active":
         raise HTTPException(409, "این برنامه دیگر فعال نیست.")
-    task.status = payload.status
+    # The student may only acknowledge completion. Plan content and
+    # scheduling remain under mentor/teacher control.
+    task.status = "completed"
     task.updated_at = utcnow()
     db.commit()
     db.refresh(task)

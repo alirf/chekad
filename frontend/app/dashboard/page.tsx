@@ -10,7 +10,7 @@ import {
   fetchStudentProfile,
   fetchStudentReports,
   fetchStudentSchedule,
-  fetchStudentStudyTasks,
+  fetchStudentWeeklyPlan,
   StudentAuthError,
   type StudentApplication,
   type StudentProfile,
@@ -61,7 +61,7 @@ export default function StudentDashboardPage() {
           fetchStudentMessageThreads(),
           fetchStudentClasses(),
           fetchStudentReports(),
-          fetchStudentStudyTasks(),
+          fetchStudentWeeklyPlan(),
         ]);
         if (!active) return;
         const [requestResult, eventResult, threadResult, classResult, reportResult, taskResult] = results;
