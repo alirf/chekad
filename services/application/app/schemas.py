@@ -1,4 +1,5 @@
 import re
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -91,4 +92,92 @@ class InternalNoteCreate(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("یادداشت نمی‌تواند خالی باشد.")
+        return value
+
+
+class StudentMessageThreadCreate(BaseModel):
+    subject: str = Field(default="گفت‌وگو با پشتیبانی چکاد", min_length=3, max_length=140)
+
+    @field_validator("subject")
+    @classmethod
+    def clean_subject(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 3:
+            raise ValueError("موضوع گفت‌وگو را وارد کنید.")
+        return value
+
+
+class StudentMessageCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("body")
+    @classmethod
+    def clean_body(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("متن پیام نمی‌تواند خالی باشد.")
+        return value
+
+
+class StudentStudyReportCreate(BaseModel):
+    report_date: date
+    study_minutes: int = Field(ge=0, le=1440)
+    topics: str = Field(min_length=2, max_length=2000)
+    summary: str = Field(min_length=2, max_length=3000)
+    blockers: str | None = Field(default=None, max_length=2000)
+    next_step: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("topics", "summary", "blockers", "next_step")
+    @classmethod
+    def clean_report_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+
+class StudentStudyTaskCreate(BaseModel):
+    title: str = Field(min_length=2, max_length=180)
+    description: str | None = Field(default=None, max_length=1200)
+    planned_at: datetime
+    duration_minutes: int = Field(default=60, ge=10, le=600)
+
+    @field_validator("title")
+    @classmethod
+    def clean_title(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 2:
+            raise ValueError("عنوان فعالیت را وارد کنید.")
+        return value
+
+    @field_validator("planned_at")
+    @classmethod
+    def require_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("زمان برنامه باید همراه منطقه زمانی ارسال شود.")
+        return value
+
+
+class StudentStudyTaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=180)
+    description: str | None = Field(default=None, max_length=1200)
+    planned_at: datetime | None = None
+    duration_minutes: int | None = Field(default=None, ge=10, le=600)
+    status: Literal["pending", "completed", "skipped"] | None = None
+
+    @field_validator("planned_at")
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("زمان برنامه باید همراه منطقه زمانی ارسال شود.")
+        return value
+
+    @field_validator("title")
+    @classmethod
+    def clean_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = " ".join(value.split())
+        if len(value) < 2:
+            raise ValueError("عنوان فعالیت معتبر نیست.")
         return value

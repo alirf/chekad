@@ -124,3 +124,125 @@ export async function fetchStudentApplications() {
 export async function logoutStudent() {
   return requestJson<{ message: string }>("/auth/student/logout", { method: "POST" });
 }
+
+
+export interface PortalMessageThread {
+  id: number;
+  channel: "support" | "advisor";
+  subject: string;
+  status: "open" | "closed";
+  last_message_at: string;
+  unread_count?: number;
+}
+export interface PortalMessage {
+  id: number;
+  sender_type: "student" | "admin";
+  sender_id: number;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+export interface StudentStudyReport {
+  id: number;
+  report_date: string;
+  study_minutes: number;
+  topics: string;
+  summary: string;
+  blockers?: string | null;
+  next_step?: string | null;
+  created_at: string;
+}
+export interface StudentStudyTask {
+  id: number;
+  title: string;
+  description?: string | null;
+  planned_at: string;
+  duration_minutes: number;
+  status: "pending" | "completed" | "skipped";
+  created_at: string;
+  updated_at: string;
+}
+export interface StudentScheduleEvent {
+  id: string;
+  category: "mentorship" | "tutoring" | "study";
+  title: string;
+  starts_at: string;
+  duration_minutes?: number | null;
+  status: string;
+}
+export interface StudentClassRecord {
+  assignment_id: number;
+  topic: string;
+  field: OlympiadField;
+  status: string;
+  start_date: string;
+  end_date?: string | null;
+  sessions: Array<{
+    id: number;
+    session_number: number;
+    scheduled_at?: string | null;
+    duration_minutes?: number | null;
+    status: string;
+  }>;
+}
+
+export async function fetchStudentMessageThreads() {
+  return requestJson<{ items: PortalMessageThread[]; total: number }>("/application/student/messages/threads");
+}
+export async function createStudentMessageThread(subject: string) {
+  return requestJson<PortalMessageThread>("/application/student/messages/threads", {
+    method: "POST",
+    body: JSON.stringify({ subject }),
+  });
+}
+export async function fetchStudentThreadMessages(threadId: number) {
+  return requestJson<{ items: PortalMessage[]; total: number }>("/application/student/messages/threads/" + threadId + "/messages");
+}
+export async function sendStudentMessage(threadId: number, body: string) {
+  return requestJson<PortalMessage>("/application/student/messages/threads/" + threadId + "/messages", {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+export async function fetchStudentReports() {
+  return requestJson<{ items: StudentStudyReport[]; total: number }>("/application/student/reports");
+}
+export async function createStudentReport(payload: Omit<StudentStudyReport, "id" | "created_at">) {
+  return requestJson<{ id: number; created_at: string }>("/application/student/reports", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+export async function fetchStudentStudyTasks(start?: string, end?: string) {
+  const params = new URLSearchParams();
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
+  const suffix = params.toString() ? "?" + params.toString() : "";
+  return requestJson<{ items: StudentStudyTask[]; total: number }>("/application/student/study-tasks" + suffix);
+}
+export async function createStudentStudyTask(payload: {
+  title: string;
+  description?: string;
+  planned_at: string;
+  duration_minutes: number;
+}) {
+  return requestJson<StudentStudyTask>("/application/student/study-tasks", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+export async function updateStudentStudyTask(taskId: number, payload: Partial<Pick<StudentStudyTask, "title" | "description" | "planned_at" | "duration_minutes" | "status">>) {
+  return requestJson<StudentStudyTask>("/application/student/study-tasks/" + taskId, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+export async function deleteStudentStudyTask(taskId: number) {
+  return requestJson<void>("/application/student/study-tasks/" + taskId, { method: "DELETE" });
+}
+export async function fetchStudentSchedule() {
+  return requestJson<{ items: StudentScheduleEvent[]; total: number }>("/application/student/schedule");
+}
+export async function fetchStudentClasses() {
+  return requestJson<{ items: StudentClassRecord[]; total: number }>("/application/student/classes");
+}

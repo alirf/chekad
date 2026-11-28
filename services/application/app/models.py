@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text,
+    Boolean, Column, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -166,3 +166,60 @@ class InternalNote(Base):
     admin_id = Column(Integer, nullable=False)  # cross-service → auth-service
     content = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class StudentMessageThread(Base):
+    __tablename__ = "student_message_threads"
+    __table_args__ = (
+        UniqueConstraint("student_auth_id", "channel", name="uq_student_message_thread_student_channel"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    student_name = Column(String(180), nullable=False)
+    channel = Column(String(20), nullable=False, default="support")
+    subject = Column(String(140), nullable=False, default="گفت‌وگو با پشتیبانی چکاد")
+    status = Column(String(20), nullable=False, default="open", index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    last_message_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class StudentMessage(Base):
+    __tablename__ = "student_messages"
+
+    id = Column(Integer, primary_key=True)
+    thread_id = Column(Integer, ForeignKey("student_message_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_type = Column(String(16), nullable=False)  # student|admin
+    sender_id = Column(Integer, nullable=False)
+    body = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    read_at = Column(DateTime(timezone=True))
+
+
+class StudentStudyReport(Base):
+    __tablename__ = "student_study_reports"
+
+    id = Column(Integer, primary_key=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    report_date = Column(Date, nullable=False, index=True)
+    study_minutes = Column(Integer, nullable=False)
+    topics = Column(Text, nullable=False)
+    summary = Column(Text, nullable=False)
+    blockers = Column(Text)
+    next_step = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
+class StudentStudyTask(Base):
+    __tablename__ = "student_study_tasks"
+
+    id = Column(Integer, primary_key=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    title = Column(String(180), nullable=False)
+    description = Column(Text)
+    planned_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    duration_minutes = Column(Integer, nullable=False, default=60)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
