@@ -87,3 +87,89 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run API, privacy and migration tests
         run: python -m pytest -q
+
+  application-postgres:
+    name: PostgreSQL concurrency and mentorship end-to-end tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chekad_test
+          POSTGRES_PASSWORD: chekad_test
+          POSTGRES_DB: chekad_application_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chekad_test -d chekad_application_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: services/application
+    env:
+      DB_URL: postgresql+psycopg2://chekad_test:chekad_test@localhost:5432/chekad_application_test
+      MIGRATION_DB_URL: postgresql+psycopg2://chekad_test:chekad_test@localhost:5432/chekad_application_test
+      SERVICE_NAME: application-service
+      APP_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install application and test dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Apply PostgreSQL migrations
+        run: alembic upgrade head
+      - name: Run PostgreSQL workflow and concurrency tests
+        run: python -m pytest -q tests/test_postgres_mentorship_workflow.py
+
+  production-gateway-config:
+    name: Production TLS gateway configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Prepare deployment sample and test certificate
+        run: |
+          cp .env.example .env
+          mkdir -p .ci/tls
+          openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+            -keyout .ci/tls/privkey.pem \
+            -out .ci/tls/fullchain.pem \
+            -subj "/CN=example.test"
+      - name: Validate production Compose override
+        env:
+          APP_ENV: production
+          PUBLIC_SITE_ORIGIN: https://example.test
+          AUTH_COOKIE_SECURE: "true"
+          GATEWAY_PORT: "80"
+          GATEWAY_HTTPS_PORT: "443"
+          TLS_CERT_DIR: ./.ci/tls
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.production.yml config --format json > /tmp/chekad-compose.json
+          python - <<'PY'
+          import json
+          with open("/tmp/chekad-compose.json", encoding="utf-8") as file:
+              config = json.load(file)
+          gateway = config["services"]["gateway"]
+          ports = {(int(port["target"]), int(port["published"])) for port in gateway["ports"]}
+          assert ports == {(80, 80), (443, 443)}, ports
+          volumes = {volume["target"]: volume["source"] for volume in gateway["volumes"]}
+          assert volumes["/etc/nginx/nginx.conf"].endswith("gateway/nginx.production.conf"), volumes
+          assert volumes["/etc/nginx/tls"].endswith(".ci/tls"), volumes
+          PY
+      - name: Validate Nginx TLS configuration
+        run: |
+          docker run --rm \
+            --add-host auth-service:127.0.0.1 \
+            --add-host application-service:127.0.0.1 \
+            --add-host people-service:127.0.0.1 \
+            --add-host content-service:127.0.0.1 \
+            --add-host frontend:127.0.0.1 \
+            -v "$PWD/gateway/nginx.production.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/.ci/tls:/etc/nginx/tls:ro" \
+            nginx:1.27-alpine nginx -t
