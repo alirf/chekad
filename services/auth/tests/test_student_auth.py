@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.db import SessionLocal
 from app.main import app
-from app.models import MentorUser, StudentUser
-from app.security import MENTOR_COOKIE_NAME, STUDENT_COOKIE_NAME
+from app.models import MentorUser, StudentUser, TeacherUser
+from app.security import MENTOR_COOKIE_NAME, STUDENT_COOKIE_NAME, TEACHER_COOKIE_NAME
 
 
 def register_payload(**overrides):
@@ -170,5 +170,67 @@ def test_inactive_mentor_cannot_authenticate():
         response = client.post(
             "/mentor/login",
             json={"phone": "09125554434", "password": password},
+        )
+        assert response.status_code == 401
+
+
+
+def test_teacher_login_has_separate_cookie_and_cannot_use_mentor_or_student_sessions():
+    password = "TeacherStrong!234"
+    with SessionLocal() as db:
+        db.add(TeacherUser(
+            tutor_profile_id=91,
+            phone="09127776655",
+            display_name="مدرس آزمایشی",
+            password_hash=bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
+            is_active=True,
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        wrong = client.post(
+            "/teacher/login",
+            json={"phone": "09127776655", "password": "WrongPassword!"},
+        )
+        assert wrong.status_code == 401
+
+        login = client.post(
+            "/teacher/login",
+            json={"phone": "۰۹۱۲۷۷۷۶۶۵۵", "password": password},
+        )
+        assert login.status_code == 200
+        assert TEACHER_COOKIE_NAME in login.cookies
+        assert login.json()["teacher"]["tutor_profile_id"] == 91
+
+        profile = client.get("/teacher/me")
+        assert profile.status_code == 200
+        assert profile.json()["display_name"] == "مدرس آزمایشی"
+        assert profile.json()["tutor_profile_id"] == 91
+
+        assert client.get("/me").status_code == 401
+        assert client.get("/student/me").status_code == 401
+        assert client.get("/mentor/me").status_code == 401
+
+        logout = client.post("/teacher/logout")
+        assert logout.status_code == 200
+        assert client.get("/teacher/me").status_code == 401
+
+
+def test_inactive_teacher_cannot_authenticate():
+    password = "TeacherStrong!234"
+    with SessionLocal() as db:
+        db.add(TeacherUser(
+            tutor_profile_id=92,
+            phone="09127776656",
+            display_name="مدرس غیرفعال",
+            password_hash=bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8"),
+            is_active=False,
+        ))
+        db.commit()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/teacher/login",
+            json={"phone": "09127776656", "password": password},
         )
         assert response.status_code == 401

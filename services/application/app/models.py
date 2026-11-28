@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    BigInteger, Boolean, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text,
+    BigInteger, Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.orm import relationship
 
@@ -157,6 +157,7 @@ class TutorAssignment(Base):
     id = Column(Integer, primary_key=True)
     application_id = Column(Integer, ForeignKey("tutoring_applications.id", ondelete="CASCADE"), nullable=False, index=True)
     tutor_id = Column(Integer, nullable=False, index=True)  # cross-service
+    person_name = Column(String(180), nullable=True)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date)
     status = Column(String(20), default="active", nullable=False)
@@ -207,6 +208,13 @@ class StudentMessageThread(Base):
             sqlite_where=text("advisor_assignment_id IS NOT NULL"),
             postgresql_where=text("advisor_assignment_id IS NOT NULL"),
         ),
+        Index(
+            "uq_student_message_threads_teacher_assignment",
+            "tutor_assignment_id",
+            unique=True,
+            sqlite_where=text("tutor_assignment_id IS NOT NULL"),
+            postgresql_where=text("tutor_assignment_id IS NOT NULL"),
+        ),
     )
 
     id = Column(Integer, primary_key=True)
@@ -214,6 +222,7 @@ class StudentMessageThread(Base):
     student_name = Column(String(180), nullable=False)
     channel = Column(String(20), nullable=False, default="support")
     advisor_assignment_id = Column(Integer, ForeignKey("mentor_assignments.id", ondelete="CASCADE"), nullable=True, index=True)
+    tutor_assignment_id = Column(Integer, ForeignKey("tutor_assignments.id", ondelete="CASCADE"), nullable=True, index=True)
     subject = Column(String(140), nullable=False, default="گفت‌وگو با پشتیبانی چکاد")
     status = Column(String(20), nullable=False, default="open", index=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
@@ -284,3 +293,28 @@ class StudentInvoice(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
 
     student = relationship("Student")
+
+
+
+class AssignedStudyTask(Base):
+    __tablename__ = "assigned_study_tasks"
+    __table_args__ = (
+        CheckConstraint(
+            "(mentor_assignment_id IS NOT NULL AND tutor_assignment_id IS NULL) OR "
+            "(mentor_assignment_id IS NULL AND tutor_assignment_id IS NOT NULL)",
+            name="ck_assigned_study_tasks_exactly_one_assignment",
+        ),
+        Index("ix_assigned_study_tasks_planned_at", "planned_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    student_auth_id = Column(Integer, nullable=False, index=True)
+    mentor_assignment_id = Column(Integer, ForeignKey("mentor_assignments.id", ondelete="CASCADE"), nullable=True, index=True)
+    tutor_assignment_id = Column(Integer, ForeignKey("tutor_assignments.id", ondelete="CASCADE"), nullable=True, index=True)
+    title = Column(String(180), nullable=False)
+    description = Column(Text)
+    planned_at = Column(DateTime(timezone=True), nullable=False)
+    duration_minutes = Column(Integer, nullable=False, default=60)
+    status = Column(String(20), nullable=False, default="pending")
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

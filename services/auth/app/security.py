@@ -4,12 +4,13 @@ from typing import Any
 import jwt
 
 from app.config import settings
-from app.models import AdminUser, MentorUser, StudentUser
+from app.models import AdminUser, MentorUser, StudentUser, TeacherUser
 
 ALGORITHM = "HS256"
 COOKIE_NAME = "chekad_access_token"
 STUDENT_COOKIE_NAME = "chekad_student_token"
 MENTOR_COOKIE_NAME = "chekad_mentor_token"
+TEACHER_COOKIE_NAME = "chekad_teacher_token"
 
 
 def _encode_token(payload: dict[str, Any]) -> str:
@@ -101,4 +102,34 @@ def decode_mentor_access_token(token: str) -> dict[str, Any]:
     )
     if payload.get("role") != "mentor":
         raise jwt.InvalidTokenError("Invalid mentor role")
+    return payload
+
+
+
+def create_teacher_access_token(teacher: TeacherUser) -> tuple[str, int]:
+    now = datetime.now(timezone.utc)
+    expires_in = settings.jwt_expire_minutes * 60
+    payload: dict[str, Any] = {
+        "sub": str(teacher.id),
+        "tutor_profile_id": teacher.tutor_profile_id,
+        "role": "teacher",
+        "iat": now,
+        "exp": now + timedelta(seconds=expires_in),
+        "iss": settings.jwt_issuer,
+        "aud": "chekad-teacher",
+    }
+    return _encode_token(payload), expires_in
+
+
+def decode_teacher_access_token(token: str) -> dict[str, Any]:
+    payload = jwt.decode(
+        token,
+        settings.jwt_secret.get_secret_value(),
+        algorithms=[ALGORITHM],
+        issuer=settings.jwt_issuer,
+        audience="chekad-teacher",
+        options={"require": ["sub", "iat", "exp", "iss", "aud"]},
+    )
+    if payload.get("role") != "teacher":
+        raise jwt.InvalidTokenError("Invalid teacher role")
     return payload

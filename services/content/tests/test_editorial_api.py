@@ -1,6 +1,8 @@
 import os
 os.environ.setdefault("DB_URL", "sqlite://")
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -257,3 +259,139 @@ def test_student_exam_registration_requires_authentication_and_same_origin():
     ).json()
     forbidden = c.post(f"/student/exams/{exam['id']}/register")
     assert forbidden.status_code == 403
+
+
+
+def test_online_exam_auto_and_manual_grading_only_reveal_released_results():
+    app.dependency_overrides[require_admin] = admin
+    app.dependency_overrides[require_student] = lambda: {
+        "id": 41,
+        "field": "physics",
+        "first_name": "آرمان",
+        "last_name": "رضایی",
+    }
+    c = client()
+    start = datetime.now(timezone.utc) - timedelta(minutes=5)
+    created = c.post(
+        "/admin/exams",
+        json={
+            "slug": "online-physics-exam",
+            "title": "آزمون آنلاین فیزیک",
+            "field": "physics",
+            "stage": "آزمایشی",
+            "starts_at": start.isoformat(),
+            "duration_minutes": 60,
+            "status": "upcoming",
+        },
+    )
+    assert created.status_code == 201
+    exam_id = created.json()["id"]
+
+    choice = c.post(
+        f"/admin/exams/{exam_id}/questions",
+        headers={"Origin": "http://testserver"},
+        json={
+            "position": 1,
+            "question_type": "single_choice",
+            "prompt": "کدام گزینه قانون دوم نیوتن را بیان می‌کند؟",
+            "options": ["F=ma", "E=mc2", "V=IR"],
+            "correct_answer": "F=ma",
+            "points": 2,
+        },
+    )
+    assert choice.status_code == 201
+    written = c.post(
+        f"/admin/exams/{exam_id}/questions",
+        headers={"Origin": "http://testserver"},
+        json={
+            "position": 2,
+            "question_type": "written",
+            "prompt": "قانون دوم نیوتن را با بیان خود توضیح بده.",
+            "points": 3,
+        },
+    )
+    assert written.status_code == 201
+
+    registered = c.post(
+        f"/student/exams/{exam_id}/register",
+        headers={"Origin": "http://testserver"},
+    )
+    assert registered.status_code == 201
+
+    started = c.post(
+        f"/student/exams/{exam_id}/attempt/start",
+        headers={"Origin": "http://testserver"},
+    )
+    assert started.status_code == 201
+    attempt = c.get(f"/student/exams/{exam_id}/attempt")
+    assert attempt.status_code == 200
+    assert len(attempt.json()["questions"]) == 2
+    assert "correct_answer" not in attempt.json()["questions"][0]
+
+    saved = c.put(
+        f"/student/exams/{exam_id}/attempt/answers",
+        headers={"Origin": "http://testserver"},
+        json={"answers": [
+            {"question_id": choice.json()["id"], "answer_text": "F=ma"},
+            {"question_id": written.json()["id"], "answer_text": "شتاب با نیروی خالص نسبت مستقیم دارد."},
+        ]},
+    )
+    assert saved.status_code == 200
+
+    submitted = c.post(
+        f"/student/exams/{exam_id}/attempt/submit",
+        headers={"Origin": "http://testserver"},
+    )
+    assert submitted.status_code == 200
+    assert submitted.json()["status"] == "submitted"
+    hidden = c.get(f"/student/exams/{exam_id}/result")
+    assert hidden.status_code == 409
+
+    admin_attempts = c.get(f"/admin/exams/{exam_id}/attempts")
+    assert admin_attempts.status_code == 200
+    attempt_row = admin_attempts.json()["items"][0]
+    assert attempt_row["earned_score"] == 2
+    written_answer = next(row for row in attempt_row["answers"] if row["question_type"] == "written")
+    graded = c.patch(
+        f"/admin/exams/{exam_id}/attempts/{attempt_row['id']}/answers/{written_answer['id']}",
+        headers={"Origin": "http://testserver"},
+        json={"earned_points": 2, "grader_note": "توضیح درست بود؛ یک نکته تکمیلی لازم داشت."},
+    )
+    assert graded.status_code == 200
+    assert graded.json()["attempt_status"] == "graded"
+
+    published = c.patch(
+        f"/admin/exams/{exam_id}/results",
+        headers={"Origin": "http://testserver"},
+        json={"results_published": True},
+    )
+    assert published.status_code == 200
+    result = c.get(f"/student/exams/{exam_id}/result")
+    assert result.status_code == 200
+    assert result.json()["earned_score"] == 4
+    assert result.json()["max_score"] == 5
+    assert result.json()["percentage"] == 80
+    assert result.json()["answers"][0]["correct_answer"] == "F=ma"
+    assert result.json()["answers"][1]["grader_note"] == "توضیح درست بود؛ یک نکته تکمیلی لازم داشت."
+
+
+def test_online_exam_rejects_unregistered_students_and_wrong_field():
+    app.dependency_overrides[require_admin] = admin
+    app.dependency_overrides[require_student] = lambda: {"id": 41, "field": "physics"}
+    c = client()
+    start = datetime.now(timezone.utc) - timedelta(minutes=2)
+    exam = c.post(
+        "/admin/exams",
+        json={
+            "slug": "registered-only-online",
+            "title": "آزمون آنلاین",
+            "field": "physics",
+            "starts_at": start.isoformat(),
+            "duration_minutes": 30,
+            "status": "upcoming",
+        },
+    ).json()
+    assert c.post(
+        f"/student/exams/{exam['id']}/attempt/start",
+        headers={"Origin": "http://testserver"},
+    ).status_code == 403

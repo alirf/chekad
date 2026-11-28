@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 from app.config import settings
 from app.db import engine, get_db
-from app.models import AdminUser, MentorUser, StudentUser
+from app.models import AdminUser, MentorUser, StudentUser, TeacherUser
 from app.schemas import (
     AdminPublic,
     LoginRequest,
@@ -20,6 +20,10 @@ from app.schemas import (
     MentorAuthResponse,
     MentorLoginRequest,
     MentorPublic,
+    TeacherAccountCreate,
+    TeacherAuthResponse,
+    TeacherLoginRequest,
+    TeacherPublic,
     StudentAuthResponse,
     StudentLoginRequest,
     StudentPublic,
@@ -29,6 +33,7 @@ from app.schemas import (
 from app.security import (
     COOKIE_NAME,
     MENTOR_COOKIE_NAME,
+    TEACHER_COOKIE_NAME,
     STUDENT_COOKIE_NAME,
     create_access_token,
     create_student_access_token,
@@ -36,6 +41,8 @@ from app.security import (
     decode_access_token,
     decode_student_access_token,
     decode_mentor_access_token,
+    create_teacher_access_token,
+    decode_teacher_access_token,
 )
 
 app = FastAPI(
@@ -527,3 +534,188 @@ def update_mentor_account_status(
     mentor.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"id": mentor.id, "is_active": mentor.is_active}
+
+
+
+def public_teacher(teacher: TeacherUser) -> TeacherPublic:
+    return TeacherPublic(
+        id=teacher.id,
+        tutor_profile_id=teacher.tutor_profile_id,
+        phone=teacher.phone,
+        display_name=teacher.display_name,
+    )
+
+
+def get_current_teacher(request: Request, db: Session = Depends(get_db)) -> TeacherUser:
+    token = request.cookies.get(TEACHER_COOKIE_NAME)
+    if not token:
+        authorization = request.headers.get("authorization", "")
+        scheme, _, credentials = authorization.partition(" ")
+        if scheme.lower() == "bearer" and credentials:
+            token = credentials.strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="برای ادامه وارد حساب مدرس شوید.")
+    try:
+        payload = decode_teacher_access_token(token)
+        teacher_id = int(payload["sub"])
+    except (jwt.InvalidTokenError, KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="نشست مدرس معتبر نیست؛ دوباره وارد شوید.")
+    teacher = db.query(TeacherUser).filter(TeacherUser.id == teacher_id).first()
+    if teacher is None or not teacher.is_active:
+        raise HTTPException(status_code=401, detail="حساب مدرس فعال نیست.")
+    return teacher
+
+
+def set_teacher_cookie(response: Response, teacher: TeacherUser) -> int:
+    token, expires_in = create_teacher_access_token(teacher)
+    response.set_cookie(
+        key=TEACHER_COOKIE_NAME,
+        value=token,
+        max_age=expires_in,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+        path="/",
+    )
+    return expires_in
+
+
+@app.post("/teacher/login", response_model=TeacherAuthResponse)
+def teacher_login(
+    payload: TeacherLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    teacher = db.query(TeacherUser).filter(TeacherUser.phone == payload.phone).first()
+    valid_password = False
+    if teacher is not None:
+        try:
+            valid_password = bcrypt.checkpw(
+                payload.password.encode("utf-8"),
+                teacher.password_hash.encode("utf-8"),
+            )
+        except (ValueError, TypeError):
+            valid_password = False
+    if teacher is None or not teacher.is_active or not valid_password:
+        raise HTTPException(status_code=401, detail="شماره همراه یا رمز عبور صحیح نیست.")
+    expires_in = set_teacher_cookie(response, teacher)
+    return TeacherAuthResponse(expires_in=expires_in, teacher=public_teacher(teacher))
+
+
+@app.get("/teacher/me", response_model=TeacherPublic)
+def teacher_me(teacher: TeacherUser = Depends(get_current_teacher)):
+    return public_teacher(teacher)
+
+
+@app.post("/teacher/logout")
+def teacher_logout(response: Response):
+    response.delete_cookie(
+        key=TEACHER_COOKIE_NAME,
+        path="/",
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite="lax",
+    )
+    return {"message": "خروج از حساب مدرس انجام شد"}
+
+
+@app.get("/admin/teacher-accounts")
+def list_teacher_accounts(
+    db: Session = Depends(get_db),
+    _: AdminUser = Depends(get_current_admin),
+):
+    rows = db.query(TeacherUser).order_by(TeacherUser.id.desc()).all()
+    return {
+        "items": [
+            {
+                "id": row.id,
+                "tutor_profile_id": row.tutor_profile_id,
+                "phone": row.phone,
+                "display_name": row.display_name,
+                "is_active": row.is_active,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.post("/admin/teacher-accounts", status_code=201)
+async def create_teacher_account(
+    payload: TeacherAccountCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: AdminUser = Depends(get_current_admin),
+):
+    require_admin_same_origin(request)
+    existing = db.query(TeacherUser).filter(
+        (TeacherUser.phone == payload.phone)
+        | (TeacherUser.tutor_profile_id == payload.tutor_profile_id)
+    ).first()
+    if existing is not None:
+        raise HTTPException(409, "برای این شماره همراه یا پروفایل مدرس قبلاً حساب ساخته شده است.")
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            response = await client.get(
+                settings.people_internal_url.rstrip("/") + f"/tutors/{payload.tutor_profile_id}"
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(503, "سرویس پروفایل مدرسان در دسترس نیست.") from exc
+    if response.status_code == 404:
+        raise HTTPException(404, "پروفایل عمومی مدرس پیدا نشد.")
+    if response.status_code != 200:
+        raise HTTPException(503, "بررسی پروفایل مدرس انجام نشد.")
+    try:
+        profile = response.json()
+    except ValueError as exc:
+        raise HTTPException(503, "پاسخ سرویس پروفایل معتبر نیست.") from exc
+    if (
+        not isinstance(profile, dict)
+        or profile.get("id") != payload.tutor_profile_id
+        or profile.get("status") != "active"
+        or profile.get("is_public") is not True
+    ):
+        raise HTTPException(422, "فقط برای پروفایل عمومی و فعال مدرس می‌توان حساب ساخت.")
+    teacher = TeacherUser(
+        tutor_profile_id=payload.tutor_profile_id,
+        phone=payload.phone,
+        display_name=payload.display_name,
+        password_hash=bcrypt.hashpw(
+            payload.password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8"),
+        is_active=True,
+    )
+    db.add(teacher)
+    try:
+        db.commit()
+        db.refresh(teacher)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "حساب مدرس با این مشخصات قبلاً ایجاد شده است.")
+    return {
+        "id": teacher.id,
+        "tutor_profile_id": teacher.tutor_profile_id,
+        "phone": teacher.phone,
+        "display_name": teacher.display_name,
+        "is_active": teacher.is_active,
+        "created_at": teacher.created_at,
+    }
+
+
+@app.patch("/admin/teacher-accounts/{account_id}")
+def update_teacher_account_status(
+    account_id: int,
+    is_active: bool,
+    request: Request,
+    db: Session = Depends(get_db),
+    _: AdminUser = Depends(get_current_admin),
+):
+    require_admin_same_origin(request)
+    teacher = db.get(TeacherUser, account_id)
+    if teacher is None:
+        raise HTTPException(404, "حساب مدرس پیدا نشد.")
+    teacher.is_active = is_active
+    teacher.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"id": teacher.id, "is_active": teacher.is_active}

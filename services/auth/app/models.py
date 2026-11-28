@@ -55,3 +55,17 @@ class MentorUser(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+
+
+
+class TeacherUser(Base):
+    __tablename__ = "teacher_users"
+
+    id = Column(Integer, primary_key=True)
+    tutor_profile_id = Column(Integer, unique=True, nullable=False, index=True)
+    phone = Column(String(16), unique=True, nullable=False, index=True)
+    display_name = Column(String(180), nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)

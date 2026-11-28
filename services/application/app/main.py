@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import json
 import re
@@ -6,7 +7,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import httpx
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, joinedload
@@ -29,13 +30,16 @@ from app.schemas import (
     StudentStudyReportCreate,
     StudentStudyTaskCreate,
     StudentStudyTaskUpdate,
+    ManagedStudyTaskCreate,
+    ManagedStudyTaskUpdate,
+    StudentAssignedTaskStatus,
     TutoringApplicationCreate,
 )
 
 app = FastAPI(
     title=f"Chekad {settings.service_name}",
-    version="0.6.0",
-    description="Student-facing portal, mentoring, messaging, scheduling and billing workflows for Chekad.",
+    version="0.7.0",
+    description="Student portal, mentor and teacher communication, weekly plans, scheduling and billing.",
 )
 PRIVACY_NOTICE_VERSION = "2026-11-28-v3"
 APPLICATION_STATUSES = {
@@ -784,14 +788,14 @@ def student_thread_messages(
     )
     now = utcnow()
     for message in messages:
-        if message.sender_type in {"admin", "mentor"} and message.read_at is None:
+        if message.sender_type in {"admin", "mentor", "teacher"} and message.read_at is None:
             message.read_at = now
     db.commit()
     return {"items": [_serialize_message(message) for message in messages], "total": len(messages)}
 
 
 @app.post("/student/messages/threads/{thread_id}/messages", status_code=201)
-def student_send_message(
+async def student_send_message(
     thread_id: int,
     payload: StudentMessageCreate,
     request: Request,
@@ -817,7 +821,9 @@ def student_send_message(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(503, "ارسال پیام انجام نشد.") from exc
-    return _serialize_message(message)
+    serialized = _serialize_message(message)
+    await message_connections.broadcast(thread.id, {"type": "message", "message": serialized})
+    return serialized
 
 
 @app.get("/admin/messages/threads")
@@ -866,14 +872,14 @@ def admin_thread_messages(
     )
     now = utcnow()
     for message in messages:
-        if message.sender_type in {"student", "mentor"} and message.read_at is None:
+        if message.sender_type in {"student", "mentor", "teacher"} and message.read_at is None:
             message.read_at = now
     db.commit()
     return {"items": [_serialize_message(message) for message in messages], "total": len(messages)}
 
 
 @app.post("/admin/messages/threads/{thread_id}/messages", status_code=201)
-def admin_send_message(
+async def admin_send_message(
     thread_id: int,
     payload: StudentMessageCreate,
     request: Request,
@@ -901,7 +907,9 @@ def admin_send_message(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(503, "ارسال پیام انجام نشد.") from exc
-    return _serialize_message(message)
+    serialized = _serialize_message(message)
+    await message_connections.broadcast(thread.id, {"type": "message", "message": serialized})
+    return serialized
 
 
 @app.patch("/admin/messages/threads/{thread_id}")
@@ -1149,23 +1157,6 @@ def student_schedule(
                 "status": session.status,
             })
 
-    tasks = (
-        db.query(models.StudentStudyTask)
-        .filter_by(student_auth_id=student["id"])
-        .order_by(models.StudentStudyTask.planned_at.asc())
-        .limit(250)
-        .all()
-    )
-    for task in tasks:
-        events.append({
-            "id": "task-" + str(task.id),
-            "category": "study",
-            "title": task.title,
-            "starts_at": task.planned_at,
-            "duration_minutes": task.duration_minutes,
-            "status": task.status,
-        })
-
     def _sort_time(event):
         value = event["starts_at"]
         return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
@@ -1338,6 +1329,7 @@ def create_student_advisor_thread(
             "id": thread.id,
             "channel": thread.channel,
             "advisor_assignment_id": thread.advisor_assignment_id,
+            "tutor_assignment_id": thread.tutor_assignment_id,
             "subject": thread.subject,
             "status": thread.status,
             "last_message_at": thread.last_message_at,
@@ -1457,7 +1449,7 @@ def mentor_thread_messages(
 
 
 @app.post("/mentor/messages/threads/{thread_id}/messages", status_code=201)
-def mentor_send_message(
+async def mentor_send_message(
     thread_id: int,
     payload: StudentMessageCreate,
     request: Request,
@@ -1484,7 +1476,9 @@ def mentor_send_message(
     except SQLAlchemyError as exc:
         db.rollback()
         raise HTTPException(503, "ارسال پیام انجام نشد.") from exc
-    return _serialize_message(message)
+    serialized = _serialize_message(message)
+    await message_connections.broadcast(thread.id, {"type": "message", "message": serialized})
+    return serialized
 
 
 @app.post("/admin/assignments", status_code=201)
@@ -2011,3 +2005,724 @@ def update_invoice_status(
     db.commit()
     db.refresh(invoice)
     return _serialize_invoice(invoice, include_private=True)
+
+
+async def require_teacher(request: Request) -> dict:
+    headers = {}
+    if request.headers.get("cookie"):
+        headers["Cookie"] = request.headers["cookie"]
+    if request.headers.get("authorization"):
+        headers["Authorization"] = request.headers["authorization"]
+    if not headers:
+        raise HTTPException(401, "برای ادامه وارد حساب مدرس شوید.")
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(
+                settings.auth_internal_url.rstrip("/") + "/teacher/me",
+                headers=headers,
+            )
+    except httpx.RequestError as exc:
+        raise HTTPException(503, "سرویس احراز هویت مدرس در دسترس نیست.") from exc
+    if response.status_code == 401:
+        raise HTTPException(401, "نشست مدرس معتبر نیست؛ دوباره وارد شوید.")
+    if response.status_code != 200:
+        raise HTTPException(503, "اعتبارسنجی حساب مدرس انجام نشد.")
+    try:
+        teacher = response.json()
+    except ValueError as exc:
+        raise HTTPException(503, "پاسخ سرویس احراز هویت معتبر نیست.") from exc
+    if (
+        not isinstance(teacher, dict)
+        or not isinstance(teacher.get("id"), int)
+        or not isinstance(teacher.get("tutor_profile_id"), int)
+        or not isinstance(teacher.get("display_name"), str)
+    ):
+        raise HTTPException(503, "اطلاعات حساب مدرس کامل نیست.")
+    return teacher
+
+
+class MessageConnectionManager:
+    """In-process WebSocket fan-out for the single application-service instance."""
+
+    def __init__(self):
+        self._connections: dict[int, set[WebSocket]] = {}
+
+    async def connect(self, thread_id: int, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self._connections.setdefault(thread_id, set()).add(websocket)
+
+    def disconnect(self, thread_id: int, websocket: WebSocket) -> None:
+        group = self._connections.get(thread_id)
+        if group is None:
+            return
+        group.discard(websocket)
+        if not group:
+            self._connections.pop(thread_id, None)
+
+    async def broadcast(self, thread_id: int, event: dict) -> None:
+        group = list(self._connections.get(thread_id, set()))
+        if not group:
+            return
+        results = await asyncio.gather(
+            *(socket.send_json(event) for socket in group),
+            return_exceptions=True,
+        )
+        for socket, result in zip(group, results):
+            if isinstance(result, Exception):
+                self.disconnect(thread_id, socket)
+
+
+message_connections = MessageConnectionManager()
+
+
+async def _authenticate_websocket(websocket: WebSocket, endpoint: str) -> dict | None:
+    headers = {}
+    cookie = websocket.headers.get("cookie")
+    authorization = websocket.headers.get("authorization")
+    if cookie:
+        headers["Cookie"] = cookie
+    if authorization:
+        headers["Authorization"] = authorization
+    if not headers:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            response = await client.get(settings.auth_internal_url.rstrip("/") + endpoint, headers=headers)
+    except httpx.RequestError:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        identity = response.json()
+    except ValueError:
+        return None
+    return identity if isinstance(identity, dict) else None
+
+
+async def _serve_message_websocket(websocket: WebSocket, thread_id: int, role: str) -> None:
+    endpoints = {
+        "student": "/student/me",
+        "mentor": "/mentor/me",
+        "teacher": "/teacher/me",
+        "admin": "/me",
+    }
+    identity = await _authenticate_websocket(websocket, endpoints[role])
+    if identity is None:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    db_provider = app.dependency_overrides.get(get_db, get_db)
+    db_scope = db_provider()
+    db = next(db_scope)
+    try:
+        thread = db.get(models.StudentMessageThread, thread_id)
+        allowed = False
+        if thread is not None:
+            if role == "student":
+                allowed = thread.student_auth_id == identity.get("id")
+            elif role == "admin":
+                allowed = True
+            elif role == "mentor" and thread.advisor_assignment_id is not None:
+                assignment = db.get(models.MentorAssignment, thread.advisor_assignment_id)
+                allowed = assignment is not None and assignment.mentor_id == identity.get("mentor_profile_id")
+            elif role == "teacher" and thread.tutor_assignment_id is not None:
+                assignment = db.get(models.TutorAssignment, thread.tutor_assignment_id)
+                allowed = assignment is not None and assignment.tutor_id == identity.get("tutor_profile_id")
+        if not allowed:
+            await websocket.close(code=1008, reason="Conversation access denied")
+            return
+
+        await message_connections.connect(thread_id, websocket)
+        try:
+            while True:
+                incoming = await websocket.receive_text()
+                if incoming == "ping":
+                    await websocket.send_json({"type": "pong"})
+        except WebSocketDisconnect:
+            pass
+        finally:
+            message_connections.disconnect(thread_id, websocket)
+    finally:
+        db_scope.close()
+
+
+@app.websocket("/student/messages/threads/{thread_id}/ws")
+async def student_message_websocket(websocket: WebSocket, thread_id: int):
+    await _serve_message_websocket(websocket, thread_id, "student")
+
+
+@app.websocket("/mentor/messages/threads/{thread_id}/ws")
+async def mentor_message_websocket(websocket: WebSocket, thread_id: int):
+    await _serve_message_websocket(websocket, thread_id, "mentor")
+
+
+@app.websocket("/teacher/messages/threads/{thread_id}/ws")
+async def teacher_message_websocket(websocket: WebSocket, thread_id: int):
+    await _serve_message_websocket(websocket, thread_id, "teacher")
+
+
+@app.websocket("/admin/messages/threads/{thread_id}/ws")
+async def admin_message_websocket(websocket: WebSocket, thread_id: int):
+    await _serve_message_websocket(websocket, thread_id, "admin")
+
+
+def _serialize_managed_task(task: models.AssignedStudyTask) -> dict:
+    return {
+        "id": task.id,
+        "student_auth_id": task.student_auth_id,
+        "mentor_assignment_id": task.mentor_assignment_id,
+        "tutor_assignment_id": task.tutor_assignment_id,
+        "assignment_kind": "mentorship" if task.mentor_assignment_id is not None else "tutoring",
+        "title": task.title,
+        "description": task.description,
+        "planned_at": task.planned_at,
+        "duration_minutes": task.duration_minutes,
+        "status": task.status,
+        "created_at": task.created_at,
+        "updated_at": task.updated_at,
+    }
+
+
+def _task_range(query, start: datetime | None, end: datetime | None):
+    if start is not None:
+        if start.tzinfo is None or start.utcoffset() is None:
+            raise HTTPException(422, "زمان شروع بازه باید منطقه زمانی داشته باشد.")
+        query = query.filter(models.AssignedStudyTask.planned_at >= start)
+    if end is not None:
+        if end.tzinfo is None or end.utcoffset() is None:
+            raise HTTPException(422, "زمان پایان بازه باید منطقه زمانی داشته باشد.")
+        query = query.filter(models.AssignedStudyTask.planned_at < end)
+    return query
+
+
+@app.get("/student/weekly-plan")
+def student_weekly_plan(
+    start: datetime | None = None,
+    end: datetime | None = None,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    """Combine the student's personal planner with assigned mentor/teacher tasks."""
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        return {"items": [], "total": 0}
+
+    mentor_ids = [
+        row.id for row in db.query(models.MentorAssignment.id)
+        .join(models.MentorshipApplication, models.MentorAssignment.application_id == models.MentorshipApplication.id)
+        .filter(
+            models.MentorshipApplication.student_id == profile.id,
+            models.MentorAssignment.status == "active",
+        )
+        .all()
+    ]
+    tutor_ids = [
+        row.id for row in db.query(models.TutorAssignment.id)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .filter(
+            models.TutoringApplication.student_id == profile.id,
+            models.TutorAssignment.status == "active",
+        )
+        .all()
+    ]
+
+    personal_query = db.query(models.StudentStudyTask).filter_by(student_auth_id=student["id"])
+    if start is not None:
+        if start.tzinfo is None or start.utcoffset() is None:
+            raise HTTPException(422, "زمان شروع بازه باید منطقه زمانی داشته باشد.")
+        personal_query = personal_query.filter(models.StudentStudyTask.planned_at >= start)
+    if end is not None:
+        if end.tzinfo is None or end.utcoffset() is None:
+            raise HTTPException(422, "زمان پایان بازه باید منطقه زمانی داشته باشد.")
+        personal_query = personal_query.filter(models.StudentStudyTask.planned_at < end)
+    personal_rows = personal_query.order_by(
+        models.StudentStudyTask.planned_at.asc(), models.StudentStudyTask.id.asc()
+    ).limit(500).all()
+
+    items = []
+    for row in personal_rows:
+        items.append({
+            **_serialize_study_task(row),
+            "student_auth_id": student["id"],
+            "mentor_assignment_id": None,
+            "tutor_assignment_id": None,
+            "assignment_kind": "personal",
+            "source_type": "student",
+        })
+
+    assigned_query = db.query(models.AssignedStudyTask).filter(
+        models.AssignedStudyTask.student_auth_id == student["id"],
+        or_(
+            models.AssignedStudyTask.mentor_assignment_id.in_(mentor_ids) if mentor_ids else text("1=0"),
+            models.AssignedStudyTask.tutor_assignment_id.in_(tutor_ids) if tutor_ids else text("1=0"),
+        ),
+    )
+    assigned_rows = _task_range(assigned_query, start, end).order_by(
+        models.AssignedStudyTask.planned_at.asc(), models.AssignedStudyTask.id.asc()
+    ).limit(500).all()
+    for row in assigned_rows:
+        item = _serialize_managed_task(row)
+        item["source_type"] = "mentor" if row.mentor_assignment_id is not None else "teacher"
+        items.append(item)
+
+    items.sort(key=lambda item: (
+        item["planned_at"].replace(tzinfo=timezone.utc)
+        if item["planned_at"].tzinfo is None else item["planned_at"],
+        item["id"],
+    ))
+    return {"items": items, "total": len(items)}
+
+
+@app.patch("/student/weekly-plan/{task_id}")
+def update_student_assigned_task_status(
+    task_id: int,
+    payload: StudentAssignedTaskStatus,
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    task = db.query(models.AssignedStudyTask).filter_by(
+        id=task_id, student_auth_id=student["id"]
+    ).first()
+    if task is None:
+        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
+    if task.mentor_assignment_id is not None:
+        assignment = db.get(models.MentorAssignment, task.mentor_assignment_id)
+    else:
+        assignment = db.get(models.TutorAssignment, task.tutor_assignment_id)
+    if assignment is None or assignment.status != "active":
+        raise HTTPException(409, "این برنامه دیگر فعال نیست.")
+    task.status = payload.status
+    task.updated_at = utcnow()
+    db.commit()
+    db.refresh(task)
+    return _serialize_managed_task(task)
+
+
+def _mentor_assignment_owned(db: Session, assignment_id: int, profile_id: int):
+    assignment = db.query(models.MentorAssignment).filter_by(
+        id=assignment_id, mentor_id=profile_id
+    ).first()
+    if assignment is None:
+        raise HTTPException(404, "تخصیص منتورینگ پیدا نشد.")
+    if assignment.status != "active":
+        raise HTTPException(409, "برنامه فقط برای همکاری فعال قابل ویرایش است.")
+    application = db.get(models.MentorshipApplication, assignment.application_id)
+    if application is None or application.student is None or application.student.auth_student_id is None:
+        raise HTTPException(409, "حساب دانش‌آموز به این درخواست متصل نیست.")
+    return assignment, application
+
+
+def _teacher_assignment_owned(db: Session, assignment_id: int, profile_id: int):
+    assignment = db.query(models.TutorAssignment).filter_by(
+        id=assignment_id, tutor_id=profile_id
+    ).first()
+    if assignment is None:
+        raise HTTPException(404, "تخصیص کلاس خصوصی پیدا نشد.")
+    if assignment.status != "active":
+        raise HTTPException(409, "برنامه فقط برای همکاری فعال قابل ویرایش است.")
+    application = db.get(models.TutoringApplication, assignment.application_id)
+    if application is None or application.student is None or application.student.auth_student_id is None:
+        raise HTTPException(409, "حساب دانش‌آموز به این درخواست متصل نیست.")
+    return assignment, application
+
+
+@app.get("/mentor/assignments/{assignment_id}/weekly-plan")
+def mentor_weekly_plan(
+    assignment_id: int,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    assignment, _application = _mentor_assignment_owned(db, assignment_id, mentor["mentor_profile_id"])
+    query = db.query(models.AssignedStudyTask).filter_by(mentor_assignment_id=assignment.id)
+    rows = _task_range(query, start, end).order_by(
+        models.AssignedStudyTask.planned_at.asc(), models.AssignedStudyTask.id.asc()
+    ).all()
+    return {"items": [_serialize_managed_task(row) for row in rows], "total": len(rows)}
+
+
+@app.post("/mentor/assignments/{assignment_id}/weekly-plan", status_code=201)
+def mentor_create_weekly_task(
+    assignment_id: int,
+    payload: ManagedStudyTaskCreate,
+    request: Request,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    assignment, application = _mentor_assignment_owned(db, assignment_id, mentor["mentor_profile_id"])
+    task = models.AssignedStudyTask(
+        student_auth_id=application.student.auth_student_id,
+        mentor_assignment_id=assignment.id,
+        **payload.model_dump(),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return _serialize_managed_task(task)
+
+
+@app.patch("/mentor/assignments/{assignment_id}/weekly-plan/{task_id}")
+def mentor_update_weekly_task(
+    assignment_id: int,
+    task_id: int,
+    payload: ManagedStudyTaskUpdate,
+    request: Request,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    _mentor_assignment_owned(db, assignment_id, mentor["mentor_profile_id"])
+    task = db.query(models.AssignedStudyTask).filter_by(
+        id=task_id, mentor_assignment_id=assignment_id
+    ).first()
+    if task is None:
+        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(task, key, value)
+    task.updated_at = utcnow()
+    db.commit()
+    db.refresh(task)
+    return _serialize_managed_task(task)
+
+
+@app.delete("/mentor/assignments/{assignment_id}/weekly-plan/{task_id}")
+def mentor_delete_weekly_task(
+    assignment_id: int,
+    task_id: int,
+    request: Request,
+    mentor: dict = Depends(require_mentor),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    _mentor_assignment_owned(db, assignment_id, mentor["mentor_profile_id"])
+    task = db.query(models.AssignedStudyTask).filter_by(
+        id=task_id, mentor_assignment_id=assignment_id
+    ).first()
+    if task is None:
+        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
+    db.delete(task)
+    db.commit()
+    return {"deleted": True}
+
+
+@app.get("/teacher/assignments")
+def teacher_assignments(
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(models.TutorAssignment, models.TutoringApplication)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .filter(
+            models.TutorAssignment.tutor_id == teacher["tutor_profile_id"],
+            models.TutorAssignment.status.in_(("active", "completed")),
+        )
+        .order_by(models.TutorAssignment.created_at.desc(), models.TutorAssignment.id.desc())
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": assignment.id,
+                "application_id": application.id,
+                "student_name": application.student.first_name + " " + application.student.last_name,
+                "student_auth_id": application.student.auth_student_id,
+                "grade": application.student.grade,
+                "field": application.field,
+                "topic": application.topic,
+                "status": assignment.status,
+                "start_date": assignment.start_date,
+                "end_date": assignment.end_date,
+                "person_name": assignment.person_name,
+            }
+            for assignment, application in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.get("/teacher/assignments/{assignment_id}/weekly-plan")
+def teacher_weekly_plan(
+    assignment_id: int,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    assignment, _application = _teacher_assignment_owned(db, assignment_id, teacher["tutor_profile_id"])
+    rows = _task_range(
+        db.query(models.AssignedStudyTask).filter_by(tutor_assignment_id=assignment.id), start, end
+    ).order_by(models.AssignedStudyTask.planned_at.asc(), models.AssignedStudyTask.id.asc()).all()
+    return {"items": [_serialize_managed_task(row) for row in rows], "total": len(rows)}
+
+
+@app.post("/teacher/assignments/{assignment_id}/weekly-plan", status_code=201)
+def teacher_create_weekly_task(
+    assignment_id: int,
+    payload: ManagedStudyTaskCreate,
+    request: Request,
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    assignment, application = _teacher_assignment_owned(db, assignment_id, teacher["tutor_profile_id"])
+    task = models.AssignedStudyTask(
+        student_auth_id=application.student.auth_student_id,
+        tutor_assignment_id=assignment.id,
+        **payload.model_dump(),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return _serialize_managed_task(task)
+
+
+@app.patch("/teacher/assignments/{assignment_id}/weekly-plan/{task_id}")
+def teacher_update_weekly_task(
+    assignment_id: int,
+    task_id: int,
+    payload: ManagedStudyTaskUpdate,
+    request: Request,
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    _teacher_assignment_owned(db, assignment_id, teacher["tutor_profile_id"])
+    task = db.query(models.AssignedStudyTask).filter_by(
+        id=task_id, tutor_assignment_id=assignment_id
+    ).first()
+    if task is None:
+        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(task, key, value)
+    task.updated_at = utcnow()
+    db.commit()
+    db.refresh(task)
+    return _serialize_managed_task(task)
+
+
+@app.delete("/teacher/assignments/{assignment_id}/weekly-plan/{task_id}")
+def teacher_delete_weekly_task(
+    assignment_id: int,
+    task_id: int,
+    request: Request,
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    _teacher_assignment_owned(db, assignment_id, teacher["tutor_profile_id"])
+    task = db.query(models.AssignedStudyTask).filter_by(
+        id=task_id, tutor_assignment_id=assignment_id
+    ).first()
+    if task is None:
+        raise HTTPException(404, "فعالیت برنامه پیدا نشد.")
+    db.delete(task)
+    db.commit()
+    return {"deleted": True}
+
+
+@app.get("/student/messages/teacher")
+def student_teacher_availability(
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        return {"available": False, "assignment": None}
+    row = (
+        db.query(models.TutorAssignment, models.TutoringApplication)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .filter(
+            models.TutoringApplication.student_id == profile.id,
+            models.TutorAssignment.status == "active",
+        )
+        .order_by(models.TutorAssignment.created_at.desc(), models.TutorAssignment.id.desc())
+        .first()
+    )
+    if row is None:
+        return {"available": False, "assignment": None}
+    assignment, application = row
+    return {
+        "available": True,
+        "assignment": {
+            "id": assignment.id,
+            "teacher_name": assignment.person_name,
+            "topic": application.topic,
+            "field": application.field,
+        },
+    }
+
+
+@app.post("/student/messages/teacher", status_code=201)
+def create_student_teacher_thread(
+    request: Request,
+    student: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    profile = db.query(models.Student).filter_by(auth_student_id=student["id"]).first()
+    if profile is None:
+        raise HTTPException(409, "برای آغاز گفت‌وگو ابتدا یک درخواست کلاس خصوصی ثبت کن.")
+    row = (
+        db.query(models.TutorAssignment, models.TutoringApplication)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .filter(
+            models.TutoringApplication.student_id == profile.id,
+            models.TutorAssignment.status == "active",
+        )
+        .order_by(models.TutorAssignment.created_at.desc(), models.TutorAssignment.id.desc())
+        .first()
+    )
+    if row is None:
+        raise HTTPException(409, "هنوز مدرس فعالی به حساب تو اختصاص داده نشده است.")
+    assignment, application = row
+    thread = db.query(models.StudentMessageThread).filter_by(
+        student_auth_id=student["id"],
+        channel="teacher",
+        tutor_assignment_id=assignment.id,
+    ).first()
+    if thread is None:
+        thread = models.StudentMessageThread(
+            student_auth_id=student["id"],
+            student_name=(student["first_name"] + " " + student["last_name"])[:180],
+            channel="teacher",
+            tutor_assignment_id=assignment.id,
+            subject=("گفت‌وگو با " + (assignment.person_name or "مدرس خصوصی"))[:140],
+            status="open",
+            last_message_at=utcnow(),
+        )
+        db.add(thread)
+        try:
+            db.commit()
+            db.refresh(thread)
+        except IntegrityError:
+            db.rollback()
+            thread = db.query(models.StudentMessageThread).filter_by(
+                student_auth_id=student["id"],
+                channel="teacher",
+                tutor_assignment_id=assignment.id,
+            ).first()
+            if thread is None:
+                raise HTTPException(503, "ساخت گفت‌وگو با مدرس انجام نشد.")
+    elif thread.status == "closed":
+        thread.status = "open"
+        thread.updated_at = utcnow()
+        db.commit()
+        db.refresh(thread)
+    return {
+        "id": thread.id,
+        "channel": thread.channel,
+        "tutor_assignment_id": thread.tutor_assignment_id,
+        "subject": thread.subject,
+        "status": thread.status,
+        "last_message_at": thread.last_message_at,
+    }
+
+
+def _teacher_thread_for_user(db: Session, thread_id: int, tutor_profile_id: int):
+    thread = (
+        db.query(models.StudentMessageThread)
+        .join(models.TutorAssignment, models.StudentMessageThread.tutor_assignment_id == models.TutorAssignment.id)
+        .filter(
+            models.StudentMessageThread.id == thread_id,
+            models.StudentMessageThread.channel == "teacher",
+            models.TutorAssignment.tutor_id == tutor_profile_id,
+            models.TutorAssignment.status.in_(("active", "completed")),
+        )
+        .first()
+    )
+    if thread is None:
+        raise HTTPException(404, "گفت‌وگو پیدا نشد.")
+    return thread
+
+
+@app.get("/teacher/messages/threads")
+def teacher_message_threads(
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(models.StudentMessageThread, models.TutoringApplication)
+        .join(models.TutorAssignment, models.StudentMessageThread.tutor_assignment_id == models.TutorAssignment.id)
+        .join(models.TutoringApplication, models.TutorAssignment.application_id == models.TutoringApplication.id)
+        .filter(
+            models.TutorAssignment.tutor_id == teacher["tutor_profile_id"],
+            models.TutorAssignment.status.in_(("active", "completed")),
+            models.StudentMessageThread.channel == "teacher",
+        )
+        .order_by(models.StudentMessageThread.last_message_at.desc())
+        .limit(200)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": thread.id,
+                "channel": thread.channel,
+                "subject": thread.subject,
+                "student_name": thread.student_name,
+                "status": thread.status,
+                "last_message_at": thread.last_message_at,
+                "unread_count": _unread_count(db, thread.id, "teacher"),
+                "topic": application.topic,
+                "field": application.field,
+            }
+            for thread, application in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@app.get("/teacher/messages/threads/{thread_id}/messages")
+def teacher_thread_messages(
+    thread_id: int,
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    thread = _teacher_thread_for_user(db, thread_id, teacher["tutor_profile_id"])
+    messages = db.query(models.StudentMessage).filter_by(thread_id=thread.id).order_by(
+        models.StudentMessage.created_at.asc(), models.StudentMessage.id.asc()
+    ).limit(300).all()
+    now = utcnow()
+    for message in messages:
+        if message.sender_type == "student" and message.read_at is None:
+            message.read_at = now
+    db.commit()
+    return {"items": [_serialize_message(message) for message in messages], "total": len(messages)}
+
+
+@app.post("/teacher/messages/threads/{thread_id}/messages", status_code=201)
+async def teacher_send_message(
+    thread_id: int,
+    payload: StudentMessageCreate,
+    request: Request,
+    teacher: dict = Depends(require_teacher),
+    db: Session = Depends(get_db),
+):
+    require_portal_same_origin(request)
+    thread = _teacher_thread_for_user(db, thread_id, teacher["tutor_profile_id"])
+    assignment = db.get(models.TutorAssignment, thread.tutor_assignment_id)
+    if thread.status != "open" or assignment is None or assignment.status != "active":
+        raise HTTPException(409, "این گفت‌وگو در حال حاضر برای ارسال پیام فعال نیست.")
+    message = models.StudentMessage(
+        thread_id=thread.id,
+        sender_type="teacher",
+        sender_id=teacher["id"],
+        body=payload.body,
+    )
+    thread.last_message_at = utcnow()
+    thread.updated_at = utcnow()
+    db.add(message)
+    try:
+        db.commit()
+        db.refresh(message)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(503, "ارسال پیام انجام نشد.") from exc
+    serialized = _serialize_message(message)
+    await message_connections.broadcast(thread.id, {"type": "message", "message": serialized})
+    return serialized

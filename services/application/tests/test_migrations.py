@@ -49,4 +49,13 @@ def test_initial_and_privacy_migrations_upgrade_cleanly(tmp_path, monkeypatch):
     assert any(index["name"] == "uq_mentor_assignments_active_application" and index["unique"] for index in inspector.get_indexes("mentor_assignments"))
     assert any(index["name"] == "uq_tutor_assignments_active_application" and index["unique"] for index in inspector.get_indexes("tutor_assignments"))
 
+    message_columns = {item["name"]: item for item in inspector.get_columns("student_message_threads")}
+    assert message_columns["tutor_assignment_id"]["nullable"] is True
+    assert "assigned_study_tasks" in inspector.get_table_names()
+    task_columns = {item["name"]: item for item in inspector.get_columns("assigned_study_tasks")}
+    assert task_columns["student_auth_id"]["nullable"] is False
+    assert task_columns["mentor_assignment_id"]["nullable"] is True
+    assert task_columns["tutor_assignment_id"]["nullable"] is True
+    assert any(index["name"] == "uq_student_message_threads_teacher_assignment" and index["unique"] for index in inspector.get_indexes("student_message_threads"))
+
     engine.dispose()
