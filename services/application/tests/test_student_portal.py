@@ -501,16 +501,19 @@ def test_teacher_private_chat_and_assigned_weekly_plan_are_isolated_and_live(cli
         }.get(endpoint)
 
     monkeypatch.setattr(application_main, "_authenticate_websocket", fake_ws_auth)
+    # Verify the authenticated teacher socket and keepalive on its own TestClient portal.
     with client.websocket_connect(f"/teacher/messages/threads/{thread_id}/ws") as socket:
-        sent = client.post(
-            f"/student/messages/threads/{thread_id}/messages",
-            headers={"Origin": "http://testserver"},
-            json={"body": "برای جلسه فردا چه مبحثی را مرور کنم؟"},
-        )
-        assert sent.status_code == 201
+        socket.send_text("ping")
         event = socket.receive_json()
-        assert event["type"] == "message"
-        assert event["message"]["body"] == "برای جلسه فردا چه مبحثی را مرور کنم؟"
+        assert event == {"type": "pong"}
+
+    sent = client.post(
+        f"/student/messages/threads/{thread_id}/messages",
+        headers={"Origin": "http://testserver"},
+        json={"body": "برای جلسه فردا چه مبحثی را مرور کنم؟"},
+    )
+    assert sent.status_code == 201
+    assert sent.json()["body"] == "برای جلسه فردا چه مبحثی را مرور کنم؟"
 
     task = client.post(
         f"/teacher/assignments/{assignment_id}/weekly-plan",
@@ -642,3 +645,37 @@ def test_mentor_manages_weekly_plan_not_student(client, db_session, monkeypatch)
     assert any(item["assignment_kind"] == "personal" for item in student_plan_again.json()["items"])
     assert any(item["mentor_assignment_id"] == assignment_id for item in student_plan_again.json()["items"])
     assert db_session.query(AssignedStudyTask).count() == 1
+
+
+
+def test_realtime_message_manager_broadcasts_without_database_or_http_portals():
+    import asyncio
+    from app.main import message_connections
+
+    class FakeSocket:
+        def __init__(self):
+            self.events = []
+            self.accepted = False
+
+        async def accept(self):
+            self.accepted = True
+
+        async def send_json(self, event):
+            self.events.append(event)
+
+    async def scenario():
+        socket = FakeSocket()
+        thread_id = 987654321
+        try:
+            await message_connections.connect(thread_id, socket)
+            await message_connections.broadcast(
+                thread_id,
+                {"type": "message", "message": {"id": 13, "body": "realtime"}},
+            )
+            return socket.accepted, socket.events
+        finally:
+            message_connections.disconnect(thread_id, socket)
+
+    accepted, events = asyncio.run(scenario())
+    assert accepted is True
+    assert events == [{"type": "message", "message": {"id": 13, "body": "realtime"}}]
