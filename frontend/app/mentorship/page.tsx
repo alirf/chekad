@@ -133,7 +133,7 @@ function MentorshipArtwork() {
         <span className="mentorship-art-label-icon">✓</span>
         <span><b>برنامه متناسب</b><small>با شرایط هر دانش‌آموز</small></span>
       </div>
-      <span className="mentorship-art-coordinate mentorship-art-coordinate-one">35°42' N</span>
+      <span className="mentorship-art-coordinate mentorship-art-coordinate-one">35°42&apos; N</span>
       <span className="mentorship-art-coordinate mentorship-art-coordinate-two">THE NEXT SUMMIT</span>
     </div>
   );

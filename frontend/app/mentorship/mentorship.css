@@ -156,11 +156,11 @@
 .mentorship-hero-baseline { position: absolute; right: 0; bottom: 0; left: 0; border-top: 1px solid rgba(255,255,255,.12); }
 .mentorship-hero-baseline .container { min-height: 43px; display: flex; align-items: center; gap: 13px; color: #879cb5; font: 8px monospace; letter-spacing: 1.2px; direction: ltr; }
 .mentorship-hero-baseline i { width: 4px; height: 4px; flex: 0 0 4px; border-radius: 50%; background: var(--ment-gold); }
-.mentorship-hero-baseline b { margin-left: auto; color: #c7d3e1; font: 10px inherit; letter-spacing: 0; direction: rtl; }
+.mentorship-hero-baseline b { margin-left: auto; color: #c7d3e1; font-size: 10px; font-weight: 700; letter-spacing: 0; direction: rtl; }
 .mentorship-benefits-section,.mentorship-fit-section,.mentorship-people-section,.mentorship-faq-section { padding-block: 84px; }
 .mentorship-benefits-section { background: #fff; }
 .mentorship-section-heading { max-width: 720px; margin-bottom: 30px; }
-.mentorship-section-kicker { color: #b17c39; font: 800 10px/1.5 inherit; letter-spacing: 1.6px; }
+.mentorship-section-kicker { color: #b17c39; font-size: 10px; font-weight: 800; line-height: 1.5; letter-spacing: 1.6px; }
 .mentorship-section-heading h2,.mentorship-fit-copy h2 {
   margin: 10px 0 8px;
   color: var(--ment-ink);
