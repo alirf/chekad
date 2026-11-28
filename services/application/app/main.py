@@ -1810,7 +1810,10 @@ async def create_application_offer(
         db.query(application_model)
         .options(joinedload(application_model.student))
         .filter_by(id=application_id)
-        .with_for_update()
+        # PostgreSQL cannot lock the nullable side of the LEFT OUTER JOIN
+        # emitted by joinedload(). Lock only the application row; the related
+        # student is read-only for offer creation.
+        .with_for_update(of=application_model)
         .first()
     )
     if application is None:
