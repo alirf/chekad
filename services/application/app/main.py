@@ -52,21 +52,38 @@ def utcnow() -> datetime:
 
 def require_public_intake() -> None:
     email = settings.privacy_contact_email.strip()
+    phone = re.sub(r"[\s()-]", "", settings.privacy_contact_phone.strip())
+    telegram = settings.privacy_contact_telegram.strip().removeprefix("@")
+    has_privacy_contact = (
+        bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email))
+        or bool(re.fullmatch(r"(?:\+98|0)?9\d{9}", phone))
+        or bool(re.fullmatch(r"[A-Za-z0-9_]{5,32}", telegram))
+    )
     origin = urlsplit(settings.public_site_origin.strip())
-    secure_origin = (
-        origin.scheme == "https" and bool(origin.netloc)
-        and origin.path in ("", "/") and not origin.query and not origin.fragment
-        and not origin.username and not origin.password
+    valid_shape = (
+        bool(origin.hostname)
+        and origin.path in ("", "/")
+        and not origin.query
+        and not origin.fragment
+        and not origin.username
+        and not origin.password
+    )
+    secure_origin = valid_shape and origin.scheme == "https"
+    local_development_origin = (
+        valid_shape
+        and settings.app_env.lower() != "production"
+        and origin.scheme == "http"
+        and origin.hostname in {"localhost", "127.0.0.1"}
     )
     if (
         not settings.public_applications_enabled
         or not settings.terms_approved
-        or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email)
-        or not secure_origin
+        or not has_privacy_contact
+        or not (secure_origin or local_development_origin)
     ):
         raise HTTPException(
             status_code=503,
-            detail="ثبت درخواست تا زمان تنظیم حریم خصوصی، شرایط خدمات و نشانی رسمی فعال نمی‌شود.",
+            detail="ثبت درخواست در حال حاضر در دسترس نیست. لطفاً از راه‌های ارتباطی چکاد پیگیری کنید.",
         )
 
 

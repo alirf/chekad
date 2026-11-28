@@ -13,9 +13,17 @@ const fieldLabels: Record<OlympiadField, string> = {
 export function RemotePeople({
   kind,
   field,
+  emptyTitle,
+  emptyDescription,
+  failureTitle,
+  failureDescription,
 }: {
   kind: PeopleKind;
   field?: OlympiadField;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  failureTitle?: string;
+  failureDescription?: string;
 }) {
   const [people, setPeople] = useState<PublicPerson[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +59,8 @@ export function RemotePeople({
   if (failed) {
     return (
       <EmptyState
-        title="دریافت اطلاعات ممکن نشد"
-        description="در حال حاضر دسترسی به فهرست افراد برقرار نیست. لطفاً بعداً دوباره مراجعه کنید."
+        title={failureTitle || "دریافت اطلاعات ممکن نشد"}
+        description={failureDescription || "در حال حاضر دسترسی به فهرست افراد برقرار نیست. لطفاً بعداً دوباره مراجعه کنید."}
         icon="!"
       />
     );
@@ -61,8 +69,8 @@ export function RemotePeople({
   if (people.length === 0) {
     return (
       <EmptyState
-        title={kind === "mentors" ? "پروفایل عمومی مشاوران هنوز منتشر نشده است" : "پروفایل عمومی مدرسان هنوز منتشر نشده است"}
-        description="پس از تأیید و انتشار اطلاعات افراد، مشخصات تخصصی آن‌ها در همین بخش نمایش داده می‌شود."
+        title={emptyTitle || (kind === "mentors" ? "پروفایل عمومی مشاوران هنوز منتشر نشده است" : "پروفایل عمومی مدرسان هنوز منتشر نشده است")}
+        description={emptyDescription || "پس از تأیید و انتشار اطلاعات افراد، مشخصات تخصصی آن‌ها در همین بخش نمایش داده می‌شود."}
       />
     );
   }
